@@ -1,7 +1,7 @@
 /**
  * 画面上バーチャル十字キー（D-Pad）＆ジョイスティック＆SFCアクションボタン
  */
-import { CONFIG } from '../config.js?v=20260924_4';
+import { CONFIG } from '../config.js?v=20260924_5';
 
 // ボタン長押し時の連続入力：最初のリピートまでの待ち時間と、その後の間隔 (ms)
 const HOLD_REPEAT_DELAY = 280;

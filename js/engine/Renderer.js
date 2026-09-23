@@ -2,7 +2,11 @@
  * 3Dクォータービュー（立体パースペクティブ）レンダラー
  * 参考画像に準拠した立体石造りの壁・敷石床・ツタ・ランタン台座・モニュメント
  */
-import { CONFIG } from '../config.js?v=20260924_4';
+import { CONFIG } from '../config.js?v=20260924_5';
+
+// 床・通路のすぐ南にある壁は、この高さ(px)の低い縁として描く
+// （壁の高さ WALL_H がタイル奥行き TILE_D より高いため、そのままだと奥の床・通路を覆い隠してしまう）
+const WALL_RIM_H = 8;
 
 export class Renderer {
   constructor(canvas) {
@@ -38,6 +42,28 @@ export class Renderer {
     const usable = visibleHeight >= this.height / 2;
     this.viewInsetTop = usable ? top : 0;
     this.viewInsetBottom = usable ? bottom : 0;
+  }
+
+  // 周囲8マスに歩けるマスがあるか
+  touchesWalkable(map, gx, gy) {
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        if ((dx || dy) && map.isWalkable(gx + dx, gy + dy)) return true;
+      }
+    }
+    return false;
+  }
+
+  // プレイヤー・モンスター・アイテムのいずれかが乗っているマスか
+  isTileOccupied(game, gx, gy) {
+    return (game.player.x === gx && game.player.y === gy) ||
+      game.monsters.some(m => m.x === gx && m.y === gy) ||
+      game.droppedItems.some(it => it.x === gx && it.y === gy);
+  }
+
+  // 隣に通路がある（部屋の出入口になっている）マスか
+  isCorridorEntrance(map, gx, gy) {
+    return [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => map.getTile(gx + dx, gy + dy) === CONFIG.TILES.CORRIDOR);
   }
 
   // グリッド座標から3Dスクリーン座標への変換
@@ -125,6 +151,8 @@ export class Renderer {
         if (!map.visited[gy][gx]) continue;
         const tile = map.getTile(gx, gy);
         if (tile !== CONFIG.TILES.WALL) continue;
+        // 床・通路に面していない岩盤は描かない（歩ける場所の形が闇の中に浮かび上がる）
+        if (!this.touchesWalkable(map, gx, gy)) continue;
 
         const { x: sx, y: sy } = this.gridToScreen(gx, gy);
         const isVisible = map.visible[gy][gx];
@@ -201,7 +229,7 @@ export class Renderer {
           baseColor = '#889488'; // ほのかに苔むした敷石
         }
       } else {
-        baseColor = '#242c38'; // 記憶の中の薄暗い敷石
+        baseColor = '#3a4454'; // 記憶の中の薄暗い敷石（暗い壁と区別できる明るさ）
       }
 
       // 敷石の丸みを持たせた矩形
@@ -249,12 +277,12 @@ export class Renderer {
         }
       }
     } else if (tile === CONFIG.TILES.CORRIDOR) {
-      // 通路：重厚な石畳キャットウォーク
-      ctx.fillStyle = isVisible ? '#3d4756' : '#1a222e';
+      // 通路：重厚な石畳キャットウォーク（壁より明るく、部屋の床よりやや暗い）
+      ctx.fillStyle = isVisible ? '#6e7888' : '#333c4a';
       ctx.fillRect(sx, sy, tw - 1, td - 1);
 
       // 通路の石畳グリッド
-      ctx.strokeStyle = isVisible ? '#526074' : '#253040';
+      ctx.strokeStyle = isVisible ? '#8b96a7' : '#444f60';
       ctx.lineWidth = 1;
       ctx.strokeRect(sx + 1, sy + 1, tw - 3, td - 3);
 
@@ -298,23 +326,40 @@ export class Renderer {
     ctx.restore();
   }
 
+  // 壁の描画高さ：真上（奥）に床・通路があれば、それを覆い隠さない高さまで低くする
+  getWallHeight(map, gx, gy) {
+    const wh = CONFIG.WALL_H;
+    const td = CONFIG.TILE_D;
+    for (let d = 1; (d - 1) * td + WALL_RIM_H < wh; d++) {
+      if (map.isWalkable(gx, gy - d)) return (d - 1) * td + WALL_RIM_H;
+    }
+    return wh;
+  }
+
   // 3D立体石壁の描画（参考画像のような重厚なブロック積み壁＋ツタ装飾＋手前壁透過）
-  draw3DWall(ctx, sx, sy, tw, td, wh, map, gx, gy, isNearFrontWall, isVisible) {
+  draw3DWall(ctx, sx, sy, tw, td, fullWallH, map, gx, gy, isNearFrontWall, isVisible) {
     const isSouthOpen = (gy < map.height - 1) && map.isWalkable(gx, gy + 1);
+    const wh = this.getWallHeight(map, gx, gy);
+    const isLowWall = wh < fullWallH;
 
     ctx.save();
-    // プレイヤーの手前にある壁は半透明化して奥を透かす！
-    if (isNearFrontWall) {
+    // プレイヤーの手前にある背の高い壁は半透明化して奥を透かす（低い縁の壁は透かす必要がない）
+    if (isNearFrontWall && !isLowWall) {
       ctx.globalAlpha = 0.22;
     }
 
-    // 1. 壁の天板 (Top Face / Capstone)
+    // 1. 壁の天板 (Top Face / Capstone)。低い縁の壁は床と区別しやすいよう暗めの色にする
     const topY = sy - wh;
-    ctx.fillStyle = isVisible ? '#64748b' : '#2e3846';
+    // 歩ける床・通路より暗くして、どこが通れるかを一目で分かるようにする
+    if (isLowWall) {
+      ctx.fillStyle = isVisible ? '#343d4a' : '#161b23';
+    } else {
+      ctx.fillStyle = isVisible ? '#434d5c' : '#1c222c';
+    }
     ctx.fillRect(sx, topY, tw, td);
 
     // 天板のハイライト＆目地
-    ctx.strokeStyle = isVisible ? '#94a3b8' : '#475569';
+    ctx.strokeStyle = isVisible ? '#5f6b7c' : '#262e3a';
     ctx.lineWidth = 1;
     ctx.strokeRect(sx + 0.5, topY + 0.5, tw - 1, td - 1);
 
@@ -326,7 +371,11 @@ export class Renderer {
     ctx.stroke();
 
     // 2. 壁の手前面 (Front Face) - 南側に空間（部屋や通路）があれば石積み壁を迫力描画！
-    if (isSouthOpen) {
+    if (isSouthOpen && isLowWall) {
+      // 低い壁：縁の側面だけを描く
+      ctx.fillStyle = isVisible ? '#303a48' : '#171d26';
+      ctx.fillRect(sx, topY + td, tw, wh);
+    } else if (isSouthOpen) {
       const frontY = topY + td;
       const frontH = wh;
 
@@ -396,7 +445,7 @@ export class Renderer {
 
     // 3. 西壁の内側面（東向き面：部屋の左側の壁）の立体感
     const isEastOpen = (gx < map.width - 1) && map.isWalkable(gx + 1, gy);
-    if (isEastOpen && !isSouthOpen) {
+    if (isEastOpen && !isSouthOpen && !isLowWall) {
       const sideW = 8;
       const sideX = sx + tw - sideW;
       const sideY = topY + td;
@@ -458,18 +507,19 @@ export class Renderer {
     const rooms = game.map.rooms;
 
     for (const r of rooms) {
-      // 1. 部屋の四隅のランタン台座
+      // 1. 部屋の奥側（北）の二隅のランタン台座
+      //    南側の隅に立てると手前の床やキャラクターを覆い隠すため、奥側のみに置く
       const corners = [
         { gx: r.x, gy: r.y },                         // 北西角
         { gx: r.x + r.w - 1, gy: r.y },               // 北東角
-        { gx: r.x, gy: r.y + r.h - 1 },               // 南西角
-        { gx: r.x + r.w - 1, gy: r.y + r.h - 1 },     // 南東角
       ];
 
       for (const c of corners) {
         if (c.gy !== gy) continue;
         if (c.gx < startGX || c.gx > endGX) continue;
         if (!game.map.visited[c.gy][c.gx]) continue;
+        // 通路の出入口になっている角や、何かが乗っている角には立てない（隠れて見えなくなる）
+        if (this.isTileOccupied(game, c.gx, c.gy) || this.isCorridorEntrance(game.map, c.gx, c.gy)) continue;
 
         const { x: sx, y: sy } = this.gridToScreen(c.gx, c.gy);
         const pillarH = wh + 12;

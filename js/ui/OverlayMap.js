@@ -2,7 +2,7 @@
  * 歩いたマップの透過オーバーレイ＆ミニマップ表示システム
  * コントローラーのL1/Select/Mキー/ボタンで【全画面透過 / ミニマップ / 非表示】をワンタッチ切替
  */
-import { CONFIG } from '../config.js?v=20260924_4';
+import { CONFIG } from '../config.js?v=20260924_5';
 
 export const MAP_MODES = {
   FULL_OVERLAY: 'full_overlay', // SFCシレン風 画面中央の半透明大マップ

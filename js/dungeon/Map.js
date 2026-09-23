@@ -1,8 +1,8 @@
 /**
  * ダンジョンマップ状態管理・視界 (FoV)・通行/角抜け判定
  */
-import { CONFIG } from '../config.js?v=20260924_4';
-import { Trap, TRAP_TYPES } from './Trap.js?v=20260924_4';
+import { CONFIG } from '../config.js?v=20260924_5';
+import { Trap, TRAP_TYPES } from './Trap.js?v=20260924_5';
 
 export class DungeonMap {
   constructor(width, height) {
