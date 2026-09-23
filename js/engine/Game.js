@@ -1,25 +1,27 @@
 /**
  * ゲームステート・ターン管理・統合ゲームエンジン
  */
-import { CONFIG } from '../config.js?v=20260924_5';
-import { sound } from './Audio.js?v=20260924_5';
-import { InputManager } from './Input.js?v=20260924_5';
-import { Renderer } from './Renderer.js?v=20260924_5';
-import { AnimationEngine } from './Animation.js?v=20260924_5';
-import { DungeonGenerator } from '../dungeon/DungeonGen.js?v=20260924_5';
-import { DungeonMap } from '../dungeon/Map.js?v=20260924_5';
-import { Player } from '../entities/Player.js?v=20260924_5';
-import { Monster } from '../entities/Monster.js?v=20260924_5';
-import { Item, ITEM_TYPES } from '../items/Item.js?v=20260924_5';
-import { Inventory } from '../items/Inventory.js?v=20260924_5';
-import { ItemEffectHandler } from '../items/ItemEffects.js?v=20260924_5';
-import { HUD } from '../ui/HUD.js?v=20260924_5';
-import { InventoryUI } from '../ui/InventoryUI.js?v=20260924_5';
-import { OverlayMap } from '../ui/OverlayMap.js?v=20260924_5';
-import { VirtualPad } from '../ui/VirtualPad.js?v=20260924_5';
+import { CONFIG } from '../config.js?v=20260924_6';
+import { sound } from './Audio.js?v=20260924_6';
+import { InputManager } from './Input.js?v=20260924_6';
+import { Renderer } from './Renderer.js?v=20260924_6';
+import { AnimationEngine } from './Animation.js?v=20260924_6';
+import { DungeonGenerator } from '../dungeon/DungeonGen.js?v=20260924_6';
+import { DungeonMap } from '../dungeon/Map.js?v=20260924_6';
+import { Player } from '../entities/Player.js?v=20260924_6';
+import { Monster } from '../entities/Monster.js?v=20260924_6';
+import { Item, ITEM_TYPES } from '../items/Item.js?v=20260924_6';
+import { Inventory } from '../items/Inventory.js?v=20260924_6';
+import { ItemEffectHandler } from '../items/ItemEffects.js?v=20260924_6';
+import { HUD } from '../ui/HUD.js?v=20260924_6';
+import { InventoryUI } from '../ui/InventoryUI.js?v=20260924_6';
+import { OverlayMap } from '../ui/OverlayMap.js?v=20260924_6';
+import { VirtualPad } from '../ui/VirtualPad.js?v=20260924_6';
 
 // アイテムが既存アイテムと重ならないよう転がる最大距離（マス）
 const ITEM_SCATTER_RADIUS = 3;
+// 開いている間はゲーム操作を受け付けない画面
+const BLOCKING_PANEL_IDS = ['help-modal', 'log-history-modal'];
 // ランダムな空きマス探索の試行回数
 const FREE_TILE_ATTEMPTS = 200;
 
@@ -237,6 +239,15 @@ export class Game {
   handleInput() {
     const action = this.input.popAction();
     if (!action) return;
+
+    // 操作方法・ログ履歴の画面を開いている間はゲームを操作させない（Esc/Bで閉じる）
+    const openPanel = BLOCKING_PANEL_IDS
+      .map(id => document.getElementById(id))
+      .find(el => el && !el.classList.contains('hidden'));
+    if (openPanel) {
+      if (action.type === 'CANCEL' || action.type === 'DASH') openPanel.classList.add('hidden');
+      return;
+    }
 
     // インベントリが開いている場合
     if (this.inventoryUI.isOpen) {

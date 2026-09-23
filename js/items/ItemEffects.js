@@ -1,7 +1,7 @@
 /**
  * アイテム使用・読解・振下・投擲時の効果ロジック
  */
-import { ITEM_TYPES, Item } from './Item.js?v=20260924_5';
+import { ITEM_TYPES, Item } from './Item.js?v=20260924_6';
 
 // 衝撃波の杖：吹き飛ばす最大距離と激突ダメージ
 const KNOCKBACK_DISTANCE = 10;

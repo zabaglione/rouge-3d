@@ -1,9 +1,9 @@
 /**
  * モンスターの定義、出現テーブル、AI行動ロジック（全24種・オリジナルローグ級）
  */
-import { Entity } from './Entity.js?v=20260924_5';
-import { CONFIG } from '../config.js?v=20260924_5';
-import { Item } from '../items/Item.js?v=20260924_5';
+import { Entity } from './Entity.js?v=20260924_6';
+import { CONFIG } from '../config.js?v=20260924_6';
+import { Item } from '../items/Item.js?v=20260924_6';
 
 export const MONSTER_DEFINITIONS = [
   // --- 浅層 (B1〜B4) ---
@@ -468,8 +468,8 @@ export class Monster extends Entity {
       return;
     }
 
-    // 2. 特殊遠隔能力判定（直線上で視線が通る場合）
-    const isStraightLine = (this.x === player.x || this.y === player.y);
+    // 2. 特殊遠隔能力判定（直線上で視線が通り、間に他のモンスターがいない場合）
+    const isStraightLine = (this.x === player.x || this.y === player.y) && !this.isShotBlockedByMonster(player, game);
 
     // レッドドラゴンの火炎ブレス
     if (this.isBreath && isStraightLine && hasLOS && dist <= 8) {
@@ -775,6 +775,20 @@ export class Monster extends Entity {
     if (this.canStepTo(nx, ny, game) && !game.getMonsterAt(nx, ny) && !(nx === game.player.x && ny === game.player.y)) {
       this.move(randDir.dx, randDir.dy);
     }
+  }
+
+  // プレイヤーまでの直線上に他のモンスターがいて、射撃・ブレス等が遮られるか
+  isShotBlockedByMonster(player, game) {
+    const stepX = Math.sign(player.x - this.x);
+    const stepY = Math.sign(player.y - this.y);
+    let x = this.x + stepX;
+    let y = this.y + stepY;
+    while (x !== player.x || y !== player.y) {
+      if (game.getMonsterAt(x, y)) return true;
+      x += stepX;
+      y += stepY;
+    }
+    return false;
   }
 
   // (nx, ny) へ1歩で進めるか（壁抜けモンスター以外は壁と角抜けを禁止）

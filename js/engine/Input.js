@@ -1,7 +1,7 @@
 /**
  * SFC風操作系・マルチ入力マネージャー (キーボード, Gamepad API, バーチャルパッド)
  */
-import { CONFIG } from '../config.js?v=20260924_5';
+import { CONFIG } from '../config.js?v=20260924_6';
 
 // 押している間だけ有効になるモディファイアキー
 const DIAGONAL_KEYS = ['KeyR', 'ControlLeft', 'ControlRight'];
@@ -17,9 +17,13 @@ export class InputManager {
     this.actionQueue = [];
 
     // モード状態フラグ
-    this.isDiagonalLock = false; // 斜め移動固定 (SFCシレンのRボタン)
-    this.isFacingLock = false;   // 向き変更モード (SFCシレンのYボタン)
-    this.isDashHolding = false;  // ダッシュ待機 (SFCシレンのBボタン)
+    // 「押している間だけ有効」(キーボード/ゲームパッド) と「画面ボタンでのON/OFF切替」を分けて持ち、
+    // ゲームパッドの毎フレームのポーリングで画面ボタンの切替が上書きされないようにする
+    this.isDiagonalHeld = false;    // 斜め移動固定 (SFCシレンのRボタン) 押下中
+    this.isFacingHeld = false;      // 向き変更モード (SFCシレンのYボタン) 押下中
+    this.isDiagonalToggled = false; // 画面の「斜め」ボタンでON
+    this.isFacingToggled = false;   // 画面の「Y」ボタンでON
+    this.isDashHolding = false;     // ダッシュ待機 (SFCシレンのBボタン)
 
     // ゲームパッド状態
     this.gamepadIndex = null;
@@ -39,6 +43,16 @@ export class InputManager {
     this.initGamepadListeners();
   }
 
+  // 斜め移動固定が有効か（押下中 または 画面ボタンでON）
+  get isDiagonalLock() {
+    return this.isDiagonalHeld || this.isDiagonalToggled;
+  }
+
+  // 向き変更モードが有効か（押下中 または 画面ボタンでON）
+  get isFacingLock() {
+    return this.isFacingHeld || this.isFacingToggled;
+  }
+
   initKeyboardListeners() {
     window.addEventListener('keydown', (e) => {
       // ゲームプレイ中の特定キーのデフォルト動作（スクロールなど）を抑止
@@ -53,8 +67,8 @@ export class InputManager {
       // モディファイア（押している間だけ有効）
       // Shift はダッシュ専用。以前は向き変更も同時に立てていたうえ keyup で解除されず、
       // 一度 Shift を押すと以後ずっと「向き変更のみ」で移動できなくなっていた
-      if (DIAGONAL_KEYS.includes(e.code)) this.isDiagonalLock = true;
-      if (FACING_KEYS.includes(e.code)) this.isFacingLock = true;
+      if (DIAGONAL_KEYS.includes(e.code)) this.isDiagonalHeld = true;
+      if (FACING_KEYS.includes(e.code)) this.isFacingHeld = true;
       if (DASH_KEYS.includes(e.code)) this.isDashHolding = true;
 
       // 単発トリガーアクション（押しっぱなしのキーリピートでは切替系を連打しない）
@@ -64,16 +78,16 @@ export class InputManager {
     window.addEventListener('keyup', (e) => {
       this.keys.delete(e.code);
 
-      if (DIAGONAL_KEYS.includes(e.code)) this.isDiagonalLock = false;
-      if (FACING_KEYS.includes(e.code)) this.isFacingLock = false;
+      if (DIAGONAL_KEYS.includes(e.code)) this.isDiagonalHeld = false;
+      if (FACING_KEYS.includes(e.code)) this.isFacingHeld = false;
       if (DASH_KEYS.includes(e.code)) this.isDashHolding = false;
     });
 
     // フォーカス外れ時はリセット
     window.addEventListener('blur', () => {
       this.keys.clear();
-      this.isDiagonalLock = false;
-      this.isFacingLock = false;
+      this.isDiagonalHeld = false;
+      this.isFacingHeld = false;
       this.isDashHolding = false;
     });
   }
@@ -221,9 +235,9 @@ export class InputManager {
     // 12: D-Pad Up, 13: Down, 14: Left, 15: Right
 
     // 斜めロック状態 (R1)
-    this.isDiagonalLock = isPressed(5) || DIAGONAL_KEYS.some(k => this.keys.has(k));
+    this.isDiagonalHeld = isPressed(5) || DIAGONAL_KEYS.some(k => this.keys.has(k));
     // 向き変更状態 (Yボタン)
-    this.isFacingLock = isPressed(3) || FACING_KEYS.some(k => this.keys.has(k));
+    this.isFacingHeld = isPressed(3) || FACING_KEYS.some(k => this.keys.has(k));
     // ダッシュホールド (Bボタン)
     this.isDashHolding = isPressed(1) || DASH_KEYS.some(k => this.keys.has(k));
 

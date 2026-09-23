@@ -1,7 +1,7 @@
 /**
  * 画面上バーチャル十字キー（D-Pad）＆ジョイスティック＆SFCアクションボタン
  */
-import { CONFIG } from '../config.js?v=20260924_5';
+import { CONFIG } from '../config.js?v=20260924_6';
 
 // ボタン長押し時の連続入力：最初のリピートまでの待ち時間と、その後の間隔 (ms)
 const HOLD_REPEAT_DELAY = 280;
@@ -92,8 +92,8 @@ export class VirtualPad {
     const yBtn = document.getElementById('vbtn-face');
     if (yBtn) {
       yBtn.addEventListener('click', () => {
-        this.input.isFacingLock = !this.input.isFacingLock;
-        yBtn.classList.toggle('active', this.input.isFacingLock);
+        this.input.isFacingToggled = !this.input.isFacingToggled;
+        yBtn.classList.toggle('active', this.input.isFacingToggled);
       });
     }
 
@@ -101,8 +101,8 @@ export class VirtualPad {
     const rBtn = document.getElementById('vbtn-diagonal');
     if (rBtn) {
       rBtn.addEventListener('click', () => {
-        this.input.isDiagonalLock = !this.input.isDiagonalLock;
-        rBtn.classList.toggle('active', this.input.isDiagonalLock);
+        this.input.isDiagonalToggled = !this.input.isDiagonalToggled;
+        rBtn.classList.toggle('active', this.input.isDiagonalToggled);
       });
     }
 
