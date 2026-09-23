@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>ROUGE - 迷宮の秘宝 | ネオ・レトロ本格ローグライクWebゲーム</title>
+  <meta name="description" content="名作レトロゲーム『ローグ』をベースに、洗練された8方向ターン制操作性と3Dクォータービューのモダンビジュアルを融合した本格ローグライクRPG。十字キー・ジョイスティック・ゲームパッド・スマホ対応。">
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/hud.css">
+  <link rel="stylesheet" href="css/inventory.css">
+  <link rel="stylesheet" href="css/controls.css">
+</head>
+<body>
+  <div id="app-container">
+    <!-- ゲーム画面 Canvas -->
+    <main id="canvas-wrapper">
+      <canvas id="game-canvas"></canvas>
+    </main>
+
+    <!-- 画面上部ステータスHUD -->
+    <header id="top-hud">
+      <div class="hud-panel">
+        <h1 class="hud-floor-badge" id="hud-floor">地下 1 階</h1>
+
+        <!-- ゲージ群 (HP / 満腹度) -->
+        <div class="hud-gauges">
+          <div class="gauge-group">
+            <div class="gauge-header">
+              <span class="gauge-label">HP</span>
+              <span class="gauge-value" id="hud-hp-text">30 / 30</span>
+            </div>
+            <div class="gauge-track">
+              <div class="gauge-fill gauge-hp" id="hud-hp-bar" style="width: 100%;"></div>
+            </div>
+          </div>
+
+          <div class="gauge-group">
+            <div class="gauge-header">
+              <span class="gauge-label">満腹度</span>
+              <span class="gauge-value" id="hud-hunger-text">100 %</span>
+            </div>
+            <div class="gauge-track">
+              <div class="gauge-fill gauge-hunger" id="hud-hunger-bar" style="width: 100%;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- サブステータス (Lv, 攻, 防, G) -->
+        <div class="hud-stats-group">
+          <div class="stat-item">
+            <span class="stat-icon">⭐</span>
+            <span class="stat-val" id="hud-lv">Lv.1</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-icon">⚔️</span>
+            <span class="stat-val" id="hud-atk">6</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-icon">🛡️</span>
+            <span class="stat-val" id="hud-def">2</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-icon">🪙</span>
+            <span class="stat-val text-gold" id="hud-gold">0 G</span>
+          </div>
+        </div>
+
+        <!-- 向き＆特殊モードバッジ -->
+        <div class="hud-stats-group">
+          <span class="stat-val text-cyan" id="hud-facing" title="現在の向き">↓</span>
+          <div id="hud-mode-badges"></div>
+        </div>
+      </div>
+
+      <!-- 右上アクションボタン -->
+      <div class="hud-actions">
+        <span id="gamepad-status-badge" class="gamepad-badge hidden">🎮 コントローラー接続済</span>
+        <button id="btn-toggle-sound" class="hud-btn" title="サウンド切替">🔊 音声ON</button>
+        <button id="btn-open-help" class="hud-btn" title="ヘルプ・操作方法">❓ 操作方法</button>
+      </div>
+    </header>
+
+    <!-- 画面下部メッセージログHUD ＆ 操作ガイド -->
+    <footer id="bottom-hud">
+      <!-- PC/ゲームパッド向けキーバインド案内バナー -->
+      <div class="desktop-key-hints">
+        <span>[移動] <kbd>矢印</kbd>/<kbd>テンキー</kbd></span>
+        <span>[攻撃] <kbd>Space</kbd></span>
+        <span>[斜め] <kbd>R</kbd></span>
+        <span>[ダッシュ] <kbd>Shift</kbd></span>
+        <span>[足踏] <kbd>.</kbd></span>
+        <span>[持物] <kbd>I</kbd></span>
+        <span>[地図] <kbd>M</kbd></span>
+      </div>
+
+      <div class="log-window">
+        <div class="log-header-bar">
+          <span>MESSAGE LOG</span>
+          <button id="btn-expand-logs" class="log-expand-btn">履歴を展開 [L]</button>
+        </div>
+        <div id="log-messages"></div>
+      </div>
+    </footer>
+
+    <!-- 画面上バーチャルコントローラー（タッチ・マウス用） -->
+    <nav id="virtual-controls-container" aria-label="ゲームコントローラー">
+      <!-- 左側：十字キー / スティック -->
+      <div class="vpad-left-zone">
+        <div class="vpad-utility-row">
+          <button id="btn-toggle-vpad-mode" class="vpad-toggle-btn">🕹️ スティック切替</button>
+          <button id="btn-toggle-vpad-hide" class="vpad-toggle-btn">🎮 パッド隠す</button>
+        </div>
+
+        <!-- 8方向十字キー -->
+        <div id="vpad-dpad" class="dpad-container">
+          <button class="dpad-btn diagonal-btn" data-vdir="7">↖</button>
+          <button class="dpad-btn" data-vdir="0">↑</button>
+          <button class="dpad-btn diagonal-btn" data-vdir="1">↗</button>
+          <button class="dpad-btn" data-vdir="6">←</button>
+          <div class="dpad-center"></div>
+          <button class="dpad-btn" data-vdir="2">→</button>
+          <button class="dpad-btn diagonal-btn" data-vdir="5">↙</button>
+          <button class="dpad-btn" data-vdir="4">↓</button>
+          <button class="dpad-btn diagonal-btn" data-vdir="3">↘</button>
+        </div>
+
+        <!-- アナログジョイスティック -->
+        <div id="vpad-joystick" class="joystick-base hidden">
+          <div id="joystick-knob" class="joystick-knob"></div>
+        </div>
+      </div>
+
+      <!-- 右側：SFCアクションボタン群 -->
+      <div class="vpad-right-zone">
+        <div class="vpad-aux-buttons">
+          <button id="vbtn-diagonal" class="vpad-aux-btn" title="斜め移動のみに制限">斜め [R]</button>
+          <button id="vbtn-rest" class="vpad-aux-btn" title="その場でHP回復">足踏 [T]</button>
+          <button id="vbtn-map" class="vpad-aux-btn" title="マップオーバーレイ切替">地図 [M]</button>
+        </div>
+
+        <div class="sfc-button-cluster">
+          <!-- Xボタン (上) -->
+          <button id="vbtn-item" class="sfc-btn sfc-btn-x" title="アイテム袋">
+            X<span>持物</span>
+          </button>
+          <!-- Yボタン (左) -->
+          <button id="vbtn-face" class="sfc-btn sfc-btn-y" title="向き変更">
+            Y<span>方向</span>
+          </button>
+          <!-- Aボタン (右) -->
+          <button id="vbtn-attack" class="sfc-btn sfc-btn-a" title="攻撃/決定">
+            A<span>攻撃</span>
+          </button>
+          <!-- Bボタン (下) -->
+          <button id="vbtn-dash" class="sfc-btn sfc-btn-b" title="ダッシュ/戻る">
+            B<span>走る</span>
+          </button>
+        </div>
+      </div>
+    </nav>
+
+    <!-- モーダル：SFC風アイテムウィンドウ（インベントリ） -->
+    <div id="inventory-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="inv-title">
+      <div class="glass-card inventory-card">
+        <div class="modal-header">
+          <h2 id="inv-title" class="modal-title">持ち物袋</h2>
+          <button id="inventory-close-btn" class="close-btn" aria-label="閉じる">✕</button>
+        </div>
+
+        <div class="inv-sub-header">
+          <span>所持アイテム一覧</span>
+          <span id="inventory-capacity" class="text-cyan">0 / 20</span>
+        </div>
+
+        <div id="inventory-underfoot-banner" class="underfoot-banner hidden"></div>
+
+        <div class="inventory-body-container">
+          <!-- アイテム一覧 -->
+          <div class="inventory-list-wrapper">
+            <ul id="inventory-item-list"></ul>
+          </div>
+
+          <!-- SFC風コマンドポップアップ（使う・装備・投げる・置く） -->
+          <div id="inventory-command-menu" class="command-submenu-panel hidden">
+            <div id="inventory-command-list"></div>
+          </div>
+        </div>
+
+        <!-- 説明欄 -->
+        <div id="inventory-item-desc" class="inventory-desc-box">
+          アイテムを選択してください。
+        </div>
+
+        <div class="inv-footer-guide">
+          [↑↓/W S]: 選択 | [Enter/Space/A]: コマンド | [Esc/X/B]: 閉じる
+        </div>
+      </div>
+    </div>
+
+    <!-- モーダル：ヘルプ・操作説明 -->
+    <div id="help-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="help-title">
+      <div class="glass-card" style="width: 680px;">
+        <div class="modal-header">
+          <h2 id="help-title" class="modal-title">操作方法 ＆ システムガイド</h2>
+          <button id="btn-close-help" class="close-btn" aria-label="閉じる">✕</button>
+        </div>
+
+        <div class="help-grid">
+          <!-- SFC風操作ガイド -->
+          <div class="help-section">
+            <h4>🎮 操作方法（SFC風操作系）</h4>
+            <table class="help-table">
+              <tr><td><b>8方向移動</b></td><td><kbd>矢印</kbd> / <kbd>WASD</kbd> / <kbd>テンキー(1-9)</kbd> / スティック</td></tr>
+              <tr><td><b>斜め移動固定</b></td><td><kbd>R</kbd> または <kbd>Ctrl</kbd>（斜めのみ移動可能）</td></tr>
+              <tr><td><b>向き変更</b></td><td><kbd>Shift</kbd> または <kbd>C</kbd>（ターン消費なしで方向転換）</td></tr>
+              <tr><td><b>ダッシュ</b></td><td><kbd>X</kbd> + 方向（角・敵に当たるまで一気に直進）</td></tr>
+              <tr><td><b>足踏み</b></td><td><kbd>.</kbd> または <kbd>T</kbd>（その場でHP高速回復）</td></tr>
+              <tr><td><b>攻撃 / 階段</b></td><td><kbd>Space</kbd> / <kbd>Enter</kbd> / <kbd>Z</kbd>（素振りで罠発見）</td></tr>
+              <tr><td><b>持ち物袋</b></td><td><kbd>I</kbd> または <kbd>E</kbd></td></tr>
+              <tr><td><b>マップ切替</b></td><td><kbd>M</kbd> または <kbd>Tab</kbd>（透過オーバーレイ/ミニ/OFF）</td></tr>
+            </table>
+          </div>
+
+          <!-- ゲームパッドガイド -->
+          <div class="help-section">
+            <h4>🕹️ コントローラー（Gamepad）</h4>
+            <table class="help-table">
+              <tr><td><b>移動</b></td><td>左スティック / 十字キー（D-Pad）</td></tr>
+              <tr><td><b>Aボタン</b></td><td>攻撃 / 決定 / 階段を降りる</td></tr>
+              <tr><td><b>Bボタン</b></td><td>ダッシュ / キャンセル</td></tr>
+              <tr><td><b>Xボタン</b></td><td>持ち物袋（インベントリ）</td></tr>
+              <tr><td><b>Yボタン</b></td><td>向き変更モード</td></tr>
+              <tr><td><b>R1 / RB</b></td><td>斜め移動固定</td></tr>
+              <tr><td><b>L1 / Select</b></td><td>マップ表示切替</td></tr>
+              <tr><td><b>R2 / RT</b></td><td>足踏み（高速HP回復）</td></tr>
+            </table>
+          </div>
+
+          <!-- ローグの基本ルール -->
+          <div class="help-section">
+            <h4>🏰 ローグのルール・攻略のコツ</h4>
+            <p style="font-size: 0.85rem; line-height: 1.5; color: #cbd5e1;">
+              ・自分が1歩動くと、モンスターも1行動するターン制。<br>
+              ・満腹度が0になると1歩ごとにHPが減るので、携帯食糧やパンで補給しましょう。<br>
+              ・怪しい通路の曲がり角では「素振り」をすると、隠された罠を発見できます。<br>
+              ・ピンチの時は杖や巻物を活用！「位置転換の杖」や「昏睡のスクロール」で難局を切り抜けましょう。
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- モーダル：ログ全履歴 -->
+    <div id="log-history-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="log-hist-title">
+      <div class="glass-card" style="width: 580px;">
+        <div class="modal-header">
+          <h2 id="log-hist-title" class="modal-title">行動ログ履歴</h2>
+          <button id="btn-close-log-history" class="close-btn" aria-label="閉じる">✕</button>
+        </div>
+        <ul id="log-history-list"></ul>
+      </div>
+    </div>
+
+    <!-- モーダル：ゲームオーバー -->
+    <div id="game-over-modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+      <div class="glass-card text-center" style="width: 440px; text-align: center; gap: 14px;">
+        <h2 style="font-family: var(--font-title); font-size: 2rem; color: #ef4444; text-shadow: 0 0 15px rgba(239, 68, 68, 0.7);">
+          GAME OVER
+        </h2>
+        <p id="game-over-cause" style="font-size: 1.05rem; color: #fca5a5;">力尽きて倒れてしまった...</p>
+        <div id="game-over-score" style="background: rgba(0,0,0,0.4); padding: 12px; border-radius: 8px; font-size: 0.9rem; color: #f59e0b;"></div>
+        <button id="btn-retry" class="btn-primary" style="margin-top: 8px;">もう一度挑戦する</button>
+      </div>
+    </div>
+
+    <!-- モーダル：ゲームクリア -->
+    <div id="game-clear-modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+      <div class="glass-card text-center" style="width: 480px; text-align: center; gap: 16px;">
+        <h2 style="font-family: var(--font-title); font-size: 2.2rem; color: #facc15; text-shadow: 0 0 20px rgba(250, 204, 21, 0.8);">
+          CONGRATULATIONS!
+        </h2>
+        <p style="font-size: 1.1rem; color: #fef08a;">
+          最深層にて「イエンダーの魔除け」を手に入れた！<br>
+          迷宮の全ての謎を解き明かした勇者として永遠に称えられるだろう。
+        </p>
+        <div id="game-clear-score" style="background: rgba(0,0,0,0.4); padding: 12px; border-radius: 8px; font-size: 0.95rem; color: #38bdf8;"></div>
+        <button id="btn-clear-retry" class="btn-primary" style="margin-top: 8px;">新たな冒険に出る</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js?v=20260923_1"></script>
+</body>
+</html>
