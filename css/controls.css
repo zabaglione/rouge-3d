@@ -7,7 +7,7 @@
   bottom: 0;
   left: 0;
   width: 100%;
-  height: 220px;
+  height: calc(var(--vpad-height) + env(safe-area-inset-bottom, 0px));
   pointer-events: none;
   z-index: 15;
   display: flex;
@@ -268,8 +268,7 @@
 /* スマホ縦持ち（ポートレート）完全最適化 (幅 <= 600px) */
 @media (max-width: 600px) {
   #virtual-controls-container {
-    height: 195px;
-    padding: 0 6px max(6px, env(safe-area-inset-bottom, 6px)) 6px;
+    padding: 0 6px calc(6px + env(safe-area-inset-bottom, 0px)) 6px;
   }
 
   .vpad-left-zone {

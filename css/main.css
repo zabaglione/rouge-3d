@@ -19,6 +19,19 @@
   --font-retro: 'DotGothic16', monospace, sans-serif;
   --font-body: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-title: 'Cinzel', serif;
+
+  /* レイアウト寸法（バーチャルパッドの高さ〈セーフエリア除く〉とログとの間隔） */
+  --vpad-height: 220px;
+  --hud-edge-gap: 12px;
+  --hud-stack-gap: 6px;
+}
+
+@media (max-width: 600px) {
+  :root {
+    --vpad-height: 170px;
+    --hud-edge-gap: 6px;
+    --hud-stack-gap: 4px;
+  }
 }
 
 *, *::before, *::after {

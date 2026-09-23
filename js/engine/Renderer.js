@@ -13,6 +13,10 @@ export class Renderer {
     this.cameraX = 0;
     this.cameraY = 0;
 
+    // HUDに覆われる画面上下の領域（px）。プレイヤーを見えている範囲の中央に置くために使う
+    this.viewInsetTop = 0;
+    this.viewInsetBottom = 0;
+
     // 照明・アニメーションタイマー
     this.torchTimer = 0;
 
@@ -26,6 +30,14 @@ export class Renderer {
     this.height = this.canvas.parentElement.clientHeight;
     this.canvas.width = this.width;
     this.canvas.height = this.height;
+  }
+
+  // HUDに覆われる上下の領域を設定（見えている範囲が画面の半分未満になる場合は無視）
+  setViewInsets(top, bottom) {
+    const visibleHeight = this.height - top - bottom;
+    const usable = visibleHeight >= this.height / 2;
+    this.viewInsetTop = usable ? top : 0;
+    this.viewInsetBottom = usable ? bottom : 0;
   }
 
   // グリッド座標から3Dスクリーン座標への変換
@@ -53,9 +65,10 @@ export class Renderer {
     const pGridY = player.renderY / CONFIG.TILE_SIZE;
     const pScreen = this.gridToScreen(pGridX, pGridY);
 
-    // カメラをプレイヤーにスムーズ追従
+    // カメラをプレイヤーにスムーズ追従（HUDに覆われていない領域の中央に配置）
+    const viewCenterY = this.viewInsetTop + (this.height - this.viewInsetTop - this.viewInsetBottom) / 2;
     const targetCamX = pScreen.x + CONFIG.TILE_W / 2 - this.width / 2;
-    const targetCamY = pScreen.y + CONFIG.TILE_D / 2 - this.height / 2;
+    const targetCamY = pScreen.y + CONFIG.TILE_D / 2 - viewCenterY;
     this.cameraX += (targetCamX - this.cameraX) * 0.15;
     this.cameraY += (targetCamY - this.cameraY) * 0.15;
 

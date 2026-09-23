@@ -181,7 +181,7 @@
 /* 画面下部メッセージログ */
 #bottom-hud {
   position: absolute;
-  bottom: 12px;
+  bottom: var(--hud-edge-gap);
   left: 50%;
   transform: translateX(-50%);
   z-index: 20;
@@ -192,90 +192,6 @@
   pointer-events: none;
   width: auto;
   max-width: calc(100vw - 360px);
-  transition: bottom 0.2s ease, max-width 0.2s ease;
-}
-
-/* 画面幅が狭い場合（タブレット・スマホ等）のレスポンシブ対応 */
-@media (max-width: 820px) {
-  #bottom-hud {
-    bottom: 185px;
-    max-width: calc(100vw - 20px);
-    width: calc(100vw - 20px);
-  }
-}
-
-/* スマホ縦持ち（ポートレート）完全最適化 (幅 <= 600px) */
-@media (max-width: 600px) {
-  #top-hud {
-    top: max(6px, env(safe-area-inset-top, 6px));
-    left: 6px;
-    right: 6px;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 4px;
-  }
-
-  .hud-panel {
-    padding: 6px 10px;
-    gap: 6px 10px;
-    flex-wrap: wrap;
-    justify-content: space-between;
-  }
-
-  .hud-floor-badge {
-    font-size: 0.95rem;
-  }
-
-  .hud-gauges {
-    gap: 8px;
-  }
-
-  .gauge-group {
-    min-width: 78px;
-  }
-
-  .gauge-header {
-    font-size: 0.68rem;
-  }
-
-  .gauge-track {
-    height: 5px;
-  }
-
-  .hud-stats-group {
-    font-size: 0.78rem;
-    gap: 8px;
-  }
-
-  .hud-actions {
-    justify-content: flex-end;
-    gap: 6px;
-  }
-
-  .hud-btn {
-    padding: 4px 8px;
-    font-size: 0.72rem;
-  }
-
-  #bottom-hud {
-    bottom: 215px; /* バーチャルパッド上部 */
-    max-width: calc(100vw - 12px);
-    width: calc(100vw - 12px);
-  }
-
-  .log-window {
-    padding: 5px 10px;
-    border-radius: 8px;
-  }
-
-  #log-messages {
-    min-height: 38px;
-  }
-
-  .log-entry {
-    font-size: 0.82rem;
-    line-height: 1.25;
-  }
 }
 
 .log-window {
@@ -292,6 +208,7 @@
   display: flex;
   flex-direction: column;
   gap: 3px;
+  transition: all 0.2s ease;
 }
 
 .log-header-bar {
@@ -371,4 +288,119 @@
 #log-history-list li {
   padding: 4px 6px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* ==========================================================================
+   レスポンシブメディアクエリ (タブレット・スマートフォン)
+   ========================================================================== */
+
+/* 画面幅が中程度の場合 */
+@media (max-width: 820px) {
+  /* バーチャルパッドの真上に配置し、ボタンと重ならないようにする */
+  #bottom-hud {
+    bottom: calc(var(--vpad-height) + env(safe-area-inset-bottom, 0px) + var(--hud-stack-gap));
+    max-width: calc(100vw - 20px);
+    width: calc(100vw - 20px);
+  }
+
+  /* パッド非表示時は画面最下部へ下げてダンジョン視界を広げる */
+  #app-container:has(#virtual-controls-container.hidden) #bottom-hud {
+    bottom: var(--hud-edge-gap);
+  }
+}
+
+/* iPhone / スマホ縦持ち（ポートレート）完全最適化 (幅 <= 600px) */
+@media (max-width: 600px) {
+  #top-hud {
+    top: max(4px, env(safe-area-inset-top, 4px));
+    left: 6px;
+    right: 6px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 3px;
+  }
+
+  .hud-panel {
+    padding: 5px 8px;
+    gap: 4px 8px;
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+
+  .hud-floor-badge {
+    font-size: 0.9rem;
+  }
+
+  .hud-gauges {
+    gap: 6px;
+  }
+
+  .gauge-group {
+    min-width: 74px;
+  }
+
+  .gauge-header {
+    font-size: 0.65rem;
+  }
+
+  .gauge-track {
+    height: 5px;
+  }
+
+  .hud-stats-group {
+    font-size: 0.75rem;
+    gap: 6px;
+  }
+
+  .hud-actions {
+    justify-content: flex-end;
+    gap: 6px;
+  }
+
+  .hud-btn {
+    padding: 3px 6px;
+    font-size: 0.7rem;
+  }
+
+  /* メッセージログ：ダンジョン視界を遮らない超軽量・半透明・スリム仕様 */
+  #bottom-hud {
+    max-width: calc(100vw - 12px);
+    width: calc(100vw - 12px);
+  }
+
+  .log-window {
+    background: rgba(6, 10, 18, 0.45); /* 透き通る半透明で背後のダンジョンを可視化 */
+    border: 1px solid rgba(56, 189, 248, 0.22);
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    padding: 4px 8px;
+    pointer-events: auto;
+    cursor: pointer;
+  }
+
+  /* スマホでは邪魔なヘッダー（MESSAGE LOG）を消去して高さを大幅削減 */
+  .log-header-bar {
+    display: none;
+  }
+
+  #log-messages {
+    min-height: 0;
+    gap: 1px;
+  }
+
+  /* 最新2行のみ表示（全履歴はログのタップで展開） */
+  .log-entry:not(:nth-last-child(-n + 2)) {
+    display: none;
+  }
+
+  .log-entry {
+    font-size: 0.78rem;
+    line-height: 1.25;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95), 0 0 2px #000000;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 }

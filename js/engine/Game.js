@@ -4,13 +4,13 @@
 import { CONFIG } from '../config.js';
 import { sound } from './Audio.js';
 import { InputManager } from './Input.js';
-import { Renderer } from './Renderer.js';
+import { Renderer } from './Renderer.js?v=20260924_1';
 import { AnimationEngine } from './Animation.js';
 import { DungeonGenerator } from '../dungeon/DungeonGen.js';
 import { DungeonMap } from '../dungeon/Map.js';
 import { Player } from '../entities/Player.js';
-import { Monster } from '../entities/Monster.js?v=20260923_1';
-import { Item, ITEM_TYPES } from '../items/Item.js?v=20260923_1';
+import { Monster } from '../entities/Monster.js?v=20260924_1';
+import { Item, ITEM_TYPES } from '../items/Item.js?v=20260924_1';
 import { Inventory } from '../items/Inventory.js';
 import { ItemEffectHandler } from '../items/ItemEffects.js';
 import { HUD } from '../ui/HUD.js';
