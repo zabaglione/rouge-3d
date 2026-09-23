@@ -1,7 +1,7 @@
 /**
  * SFC風操作系・マルチ入力マネージャー (キーボード, Gamepad API, バーチャルパッド)
  */
-import { CONFIG } from '../config.js?v=20260924_6';
+import { CONFIG } from '../config.js?v=20260924_7';
 
 // 押している間だけ有効になるモディファイアキー
 const DIAGONAL_KEYS = ['KeyR', 'ControlLeft', 'ControlRight'];

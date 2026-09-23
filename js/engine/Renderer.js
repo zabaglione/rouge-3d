@@ -2,11 +2,16 @@
  * 3Dクォータービュー（立体パースペクティブ）レンダラー
  * 参考画像に準拠した立体石造りの壁・敷石床・ツタ・ランタン台座・モニュメント
  */
-import { CONFIG } from '../config.js?v=20260924_6';
+import { CONFIG } from '../config.js?v=20260924_7';
 
 // 床・通路のすぐ南にある壁は、この高さ(px)の低い縁として描く
 // （壁の高さ WALL_H がタイル奥行き TILE_D より高いため、そのままだと奥の床・通路を覆い隠してしまう）
 const WALL_RIM_H = 8;
+
+// 壁掛けの旗の寸法（幅 px、壁の高さに対する旗の長さの割合、壁上端からの余白 px）
+const BANNER_W = 16;
+const BANNER_HEIGHT_RATIO = 0.7;
+const BANNER_TOP_MARGIN = 4;
 
 export class Renderer {
   constructor(canvas) {
@@ -464,6 +469,44 @@ export class Renderer {
     ctx.restore();
   }
 
+  // 壁面に掛けた旗（cx: 中心X, frontY: 壁の手前面の上端, wallH: 壁の手前面の高さ）
+  drawWallBanner(ctx, cx, frontY, wallH, isVisible) {
+    const w = BANNER_W;
+    const h = wallH * BANNER_HEIGHT_RATIO;
+    const top = frontY + BANNER_TOP_MARGIN;
+    const left = cx - w / 2;
+    const notch = w / 2; // 裾の切れ込みの深さ
+
+    ctx.save();
+    // 吊り棒
+    ctx.fillStyle = isVisible ? '#a16207' : '#3f2a0b';
+    ctx.fillRect(left - 3, top - 2, w + 6, 3);
+
+    // 布（裾が燕尾形の旗）
+    ctx.fillStyle = isVisible ? '#991b1b' : '#3b0d0d';
+    ctx.beginPath();
+    ctx.moveTo(left, top);
+    ctx.lineTo(left + w, top);
+    ctx.lineTo(left + w, top + h);
+    ctx.lineTo(cx, top + h - notch);
+    ctx.lineTo(left, top + h);
+    ctx.closePath();
+    ctx.fill();
+
+    // 金の縁取りと紋章
+    if (isVisible) {
+      ctx.strokeStyle = '#fbbf24';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.fillStyle = '#fbbf24';
+      ctx.font = '9px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('♜', cx, top + h * 0.4);
+    }
+    ctx.restore();
+  }
+
   // 参考画像風の垂れ下がるツタと葉の描画
   drawHangingIvy(ctx, sx, frontY, tw, seed) {
     ctx.save();
@@ -637,40 +680,15 @@ export class Renderer {
         }
       }
 
-      // 3. 参考画像風の木製ベンチ＆素焼きの壺（部屋の北側壁沿い）
-      if (r.w >= 6 && r.h >= 5 && (r.y) === gy && startGX <= (r.x + 2) && (r.x + 2) <= endGX) {
-        const bx = r.x + 2;
-        const by = r.y;
-        if (game.map.visited[by][bx]) {
-          const isOccupied = (game.player.x === bx && game.player.y === by) ||
-                             game.monsters.some(m => m.x === bx && m.y === by);
-          if (!isOccupied) {
-            const { x: sx, y: sy } = this.gridToScreen(bx, by);
-            ctx.save();
-            // ベンチの影
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-            ctx.fillRect(sx + 2, sy + td / 2, tw - 10, 6);
-
-            // 木製ベンチ（座面・脚・背もたれ）
-            ctx.fillStyle = '#854d0e'; // 木の座面
-            ctx.fillRect(sx + 3, sy + td / 2 - 5, tw - 12, 5);
-            ctx.fillStyle = '#a16207';
-            ctx.fillRect(sx + 3, sy + td / 2 - 11, tw - 12, 4); // 背もたれ
-            // 脚
-            ctx.fillStyle = '#543007';
-            ctx.fillRect(sx + 5, sy + td / 2, 3, 5);
-            ctx.fillRect(sx + tw - 12, sy + td / 2, 3, 5);
-
-            // ベンチ脇の素焼きの壺（Urn/Vase）
-            ctx.fillStyle = '#ca8a04';
-            ctx.beginPath();
-            ctx.arc(sx + tw - 4, sy + td / 2 - 2, 4, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.fillStyle = '#854d0e';
-            ctx.fillRect(sx + tw - 5, sy + td / 2 - 6, 2.5, 2);
-            ctx.restore();
-          }
-        }
+      // 3. 部屋の奥（北）の壁に掛けた旗（タペストリー）
+      //    床の上の小物はアイテムと見分けがつきにくいため、装飾は壁面に掛ける
+      const bannerX = r.x + 2;
+      const wallY = r.y - 1;
+      if (r.w >= 6 && r.y === gy && startGX <= bannerX && bannerX <= endGX &&
+          game.map.getTile(bannerX, wallY) === CONFIG.TILES.WALL && game.map.visited[wallY][bannerX]) {
+        const { x: sx, y: wallSy } = this.gridToScreen(bannerX, wallY);
+        const wallH = this.getWallHeight(game.map, bannerX, wallY);
+        this.drawWallBanner(ctx, sx + tw / 2, wallSy - wallH + td, wallH, game.map.visible[wallY][bannerX]);
       }
 
       // 4. 参考画像風の部屋の隅の白野草・薬草（Wildflowers）

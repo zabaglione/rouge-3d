@@ -1,8 +1,8 @@
 /**
  * プレイヤーキャラクターのステータス・行動・成長システム
  */
-import { Entity } from './Entity.js?v=20260924_6';
-import { CONFIG } from '../config.js?v=20260924_6';
+import { Entity } from './Entity.js?v=20260924_7';
+import { CONFIG } from '../config.js?v=20260924_7';
 
 export class Player extends Entity {
   constructor(x, y) {

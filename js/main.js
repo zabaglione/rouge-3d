@@ -1,7 +1,7 @@
 /**
  * メインエントリーポイント
  */
-import { Game } from './engine/Game.js?v=20260924_6';
+import { Game } from './engine/Game.js?v=20260924_7';
 
 window.addEventListener('DOMContentLoaded', () => {
   const canvas = document.getElementById('game-canvas');

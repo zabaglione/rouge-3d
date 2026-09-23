@@ -1,22 +1,22 @@
 /**
  * ゲームステート・ターン管理・統合ゲームエンジン
  */
-import { CONFIG } from '../config.js?v=20260924_6';
-import { sound } from './Audio.js?v=20260924_6';
-import { InputManager } from './Input.js?v=20260924_6';
-import { Renderer } from './Renderer.js?v=20260924_6';
-import { AnimationEngine } from './Animation.js?v=20260924_6';
-import { DungeonGenerator } from '../dungeon/DungeonGen.js?v=20260924_6';
-import { DungeonMap } from '../dungeon/Map.js?v=20260924_6';
-import { Player } from '../entities/Player.js?v=20260924_6';
-import { Monster } from '../entities/Monster.js?v=20260924_6';
-import { Item, ITEM_TYPES } from '../items/Item.js?v=20260924_6';
-import { Inventory } from '../items/Inventory.js?v=20260924_6';
-import { ItemEffectHandler } from '../items/ItemEffects.js?v=20260924_6';
-import { HUD } from '../ui/HUD.js?v=20260924_6';
-import { InventoryUI } from '../ui/InventoryUI.js?v=20260924_6';
-import { OverlayMap } from '../ui/OverlayMap.js?v=20260924_6';
-import { VirtualPad } from '../ui/VirtualPad.js?v=20260924_6';
+import { CONFIG } from '../config.js?v=20260924_7';
+import { sound } from './Audio.js?v=20260924_7';
+import { InputManager } from './Input.js?v=20260924_7';
+import { Renderer } from './Renderer.js?v=20260924_7';
+import { AnimationEngine } from './Animation.js?v=20260924_7';
+import { DungeonGenerator } from '../dungeon/DungeonGen.js?v=20260924_7';
+import { DungeonMap } from '../dungeon/Map.js?v=20260924_7';
+import { Player } from '../entities/Player.js?v=20260924_7';
+import { Monster } from '../entities/Monster.js?v=20260924_7';
+import { Item, ITEM_TYPES } from '../items/Item.js?v=20260924_7';
+import { Inventory } from '../items/Inventory.js?v=20260924_7';
+import { ItemEffectHandler } from '../items/ItemEffects.js?v=20260924_7';
+import { HUD } from '../ui/HUD.js?v=20260924_7';
+import { InventoryUI } from '../ui/InventoryUI.js?v=20260924_7';
+import { OverlayMap } from '../ui/OverlayMap.js?v=20260924_7';
+import { VirtualPad } from '../ui/VirtualPad.js?v=20260924_7';
 
 // アイテムが既存アイテムと重ならないよう転がる最大距離（マス）
 const ITEM_SCATTER_RADIUS = 3;
