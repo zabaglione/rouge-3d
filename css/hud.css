@@ -303,9 +303,9 @@
     width: calc(100vw - 20px);
   }
 
-  /* パッド非表示時は画面最下部へ下げてダンジョン視界を広げる */
-  #app-container:has(#virtual-controls-container.hidden) #bottom-hud {
-    bottom: var(--hud-edge-gap);
+  /* パッド折りたたみ時は「パッド表示」ボタンの上まで下げてダンジョン視界を広げる */
+  #app-container:has(#virtual-controls-container.collapsed) #bottom-hud {
+    bottom: calc(var(--vpad-collapsed-height) + env(safe-area-inset-bottom, 0px) + var(--hud-stack-gap));
   }
 }
 

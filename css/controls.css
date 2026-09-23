@@ -14,13 +14,18 @@
   justify-content: space-between;
   align-items: flex-end;
   padding: 0 16px 16px 16px;
-  transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
-#virtual-controls-container.hidden {
-  opacity: 0;
-  transform: translateY(20px);
-  pointer-events: none !important;
+/* 折りたたみ時：「パッド表示」ボタンだけを残して他を隠す */
+#virtual-controls-container.collapsed {
+  height: calc(var(--vpad-collapsed-height) + env(safe-area-inset-bottom, 0px));
+}
+
+#virtual-controls-container.collapsed .dpad-container,
+#virtual-controls-container.collapsed .joystick-base,
+#virtual-controls-container.collapsed .vpad-right-zone,
+#virtual-controls-container.collapsed #btn-toggle-vpad-mode {
+  display: none;
 }
 
 /* 左側：十字キー / スティック */

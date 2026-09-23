@@ -10,6 +10,19 @@ export const MAP_MODES = {
   OFF: 'off',                   // 非表示
 };
 
+// 中央全体マップの表示設定
+const FULL_MAP_STYLE = {
+  BACKDROP: 'rgba(3, 6, 12, 0.82)', // ゲーム画面を暗くしてマップを読みやすくする
+  MOBILE_BREAKPOINT: 600,
+  SCREEN_MARGIN: { mobile: 12, desktop: 70 },
+  TITLE_HEIGHT: 22,
+  FRAME_PADDING: 8,
+  MAX_CELL: 16,
+  MIN_CELL: 3,
+  FLOOR_COLOR: 'rgba(100, 116, 139, 0.85)',
+  CORRIDOR_COLOR: 'rgba(148, 163, 184, 0.9)',
+};
+
 export class OverlayMap {
   constructor() {
     this.mode = MAP_MODES.MINI_MAP; // 初期状態は右上のミニマップ（ゲーム画面を覆わない）
@@ -31,51 +44,53 @@ export class OverlayMap {
     this.mode = mode;
   }
 
-  render(ctx, screenW, screenH, game) {
+  // renderer の viewInset（HUDに覆われる上下領域）を避けて描画する
+  render(renderer, game) {
     if (this.mode === MAP_MODES.OFF) return;
 
-    const map = game.map;
-    const player = game.player;
-
     if (this.mode === MAP_MODES.FULL_OVERLAY) {
-      this.renderFullOverlay(ctx, screenW, screenH, game);
+      this.renderFullOverlay(renderer, game);
     } else if (this.mode === MAP_MODES.MINI_MAP) {
-      this.renderMiniMap(ctx, screenW, screenH, game);
+      this.renderMiniMap(renderer, game);
     }
   }
 
-  // SFCシレン風 中央の透過大マップ
-  renderFullOverlay(ctx, screenW, screenH, game) {
+  // SFCシレン風 画面全体を暗転させた大マップ
+  renderFullOverlay(renderer, game) {
+    const { ctx, width: screenW, height: screenH, viewInsetTop, viewInsetBottom } = renderer;
     const map = game.map;
     const player = game.player;
+    const style = FULL_MAP_STYLE;
 
-    // 画面中央に収まるスケールを計算（モバイル縦長時は余白を狭めて見やすく）
-    const padding = screenW < 600 ? 20 : 70;
-    const availableW = screenW - padding * 2;
-    const availableH = screenH - (screenW < 600 ? 180 : padding * 2);
+    // HUDに覆われていない領域いっぱいに収まるスケールを計算
+    const margin = screenW < style.MOBILE_BREAKPOINT ? style.SCREEN_MARGIN.mobile : style.SCREEN_MARGIN.desktop;
+    const areaTop = viewInsetTop + style.TITLE_HEIGHT;
+    const availableW = screenW - margin * 2;
+    const availableH = screenH - areaTop - viewInsetBottom - style.FRAME_PADDING * 2;
 
-    const cellW = Math.min(16, Math.floor(availableW / map.width));
-    const cellH = Math.min(16, Math.floor(availableH / map.height));
-    const cellSize = Math.max(3, Math.min(cellW, cellH));
+    const cellW = Math.floor(availableW / map.width);
+    const cellH = Math.floor(availableH / map.height);
+    const cellSize = Math.max(style.MIN_CELL, Math.min(style.MAX_CELL, cellW, cellH));
 
     const totalMapW = map.width * cellSize;
     const totalMapH = map.height * cellSize;
 
     const startX = Math.round((screenW - totalMapW) / 2);
-    const startY = Math.round((screenH - totalMapH) / 2);
+    const startY = Math.round(areaTop + (availableH - totalMapH) / 2 + style.FRAME_PADDING);
+    const pad = style.FRAME_PADDING;
 
     ctx.save();
-    // 全体背景：極力薄いグラス調（ゲーム画面を暗くしない）
-    ctx.fillStyle = 'rgba(5, 10, 20, 0.28)';
-    ctx.fillRect(startX - 8, startY - 8, totalMapW + 16, totalMapH + 16);
+    // 画面全体を暗転させ、マップを主役にする
+    ctx.fillStyle = style.BACKDROP;
+    ctx.fillRect(0, 0, screenW, screenH);
     ctx.strokeStyle = 'rgba(56, 189, 248, 0.45)';
     ctx.lineWidth = 1.5;
-    ctx.strokeRect(startX - 8, startY - 8, totalMapW + 16, totalMapH + 16);
+    ctx.strokeRect(startX - pad, startY - pad, totalMapW + pad * 2, totalMapH + pad * 2);
 
     // タイトルバッジ
-    ctx.font = '11px sans-serif';
-    ctx.fillStyle = 'rgba(56, 189, 248, 0.8)';
-    ctx.fillText('MAP [L1 / M / Tab]', startX, startY - 14);
+    ctx.font = '12px sans-serif';
+    ctx.fillStyle = 'rgba(56, 189, 248, 0.9)';
+    ctx.fillText(`地下 ${game.currentFloor} 階 MAP  [M / 地図] で切替`, startX - pad, startY - pad - 6);
 
     // 探索済みタイルの描画
     for (let y = 0; y < map.height; y++) {
@@ -87,10 +102,10 @@ export class OverlayMap {
         const py = startY + y * cellSize;
 
         if (tile === CONFIG.TILES.FLOOR) {
-          ctx.fillStyle = 'rgba(100, 116, 139, 0.45)';
+          ctx.fillStyle = style.FLOOR_COLOR;
           ctx.fillRect(px, py, cellSize, cellSize);
         } else if (tile === CONFIG.TILES.CORRIDOR) {
-          ctx.fillStyle = 'rgba(148, 163, 184, 0.6)';
+          ctx.fillStyle = style.CORRIDOR_COLOR;
           ctx.fillRect(px + 1, py + 1, cellSize - 2, cellSize - 2);
         } else if (tile === CONFIG.TILES.STAIRS_DOWN) {
           ctx.fillStyle = '#38bdf8';
@@ -151,7 +166,8 @@ export class OverlayMap {
   }
 
   // 画面右上の小型ミニマップ
-  renderMiniMap(ctx, screenW, screenH, game) {
+  renderMiniMap(renderer, game) {
+    const { ctx, width: screenW, viewInsetTop } = renderer;
     const map = game.map;
     const player = game.player;
 
@@ -162,7 +178,7 @@ export class OverlayMap {
 
     const margin = isMobile ? 8 : 16;
     const startX = screenW - totalW - margin;
-    const startY = isMobile ? 96 : margin + 54; // ヘッダーHUDの下
+    const startY = viewInsetTop + margin; // ヘッダーHUDの下
 
     ctx.save();
     ctx.fillStyle = 'rgba(10, 14, 23, 0.75)';

@@ -22,6 +22,7 @@
 
   /* レイアウト寸法（バーチャルパッドの高さ〈セーフエリア除く〉とログとの間隔） */
   --vpad-height: 220px;
+  --vpad-collapsed-height: 44px;
   --hud-edge-gap: 12px;
   --hud-stack-gap: 6px;
 }
@@ -29,6 +30,7 @@
 @media (max-width: 600px) {
   :root {
     --vpad-height: 170px;
+    --vpad-collapsed-height: 34px;
     --hud-edge-gap: 6px;
     --hud-stack-gap: 4px;
   }

@@ -84,10 +84,11 @@ export class VirtualPad {
     }
 
     // バーチャルコントローラー自体の表示/非表示切替
+    // （.hidden だと再表示ボタンごと消えるため、ボタンだけ残す .collapsed を使う）
     if (this.toggleHideBtn) {
       this.toggleHideBtn.addEventListener('click', () => {
         this.isVisible = !this.isVisible;
-        this.containerEl.classList.toggle('hidden', !this.isVisible);
+        this.containerEl.classList.toggle('collapsed', !this.isVisible);
         this.toggleHideBtn.textContent = this.isVisible ? '🎮 パッド隠す' : '🎮 パッド表示';
       });
     }

@@ -4,19 +4,19 @@
 import { CONFIG } from '../config.js';
 import { sound } from './Audio.js';
 import { InputManager } from './Input.js';
-import { Renderer } from './Renderer.js?v=20260924_1';
+import { Renderer } from './Renderer.js?v=20260924_2';
 import { AnimationEngine } from './Animation.js';
 import { DungeonGenerator } from '../dungeon/DungeonGen.js';
 import { DungeonMap } from '../dungeon/Map.js';
 import { Player } from '../entities/Player.js';
-import { Monster } from '../entities/Monster.js?v=20260924_1';
-import { Item, ITEM_TYPES } from '../items/Item.js?v=20260924_1';
+import { Monster } from '../entities/Monster.js?v=20260924_2';
+import { Item, ITEM_TYPES } from '../items/Item.js?v=20260924_2';
 import { Inventory } from '../items/Inventory.js';
 import { ItemEffectHandler } from '../items/ItemEffects.js';
 import { HUD } from '../ui/HUD.js';
 import { InventoryUI } from '../ui/InventoryUI.js';
-import { OverlayMap } from '../ui/OverlayMap.js';
-import { VirtualPad } from '../ui/VirtualPad.js';
+import { OverlayMap } from '../ui/OverlayMap.js?v=20260924_2';
+import { VirtualPad } from '../ui/VirtualPad.js?v=20260924_2';
 
 export const GAME_STATES = {
   TITLE: 'title',
@@ -223,7 +223,7 @@ export class Game {
     this.renderer.render(this, deltaMs);
 
     // 5. オーバーレイマップ描画
-    this.overlayMap.render(this.renderer.ctx, this.renderer.width, this.renderer.height, this);
+    this.overlayMap.render(this.renderer, this);
 
     // 6. UI＆ステータス更新
     this.hud.updateStatus(this);
