@@ -6,6 +6,11 @@
 ![ROUGE Banner](https://img.shields.io/badge/Platform-Web%20%7C%20Mobile-blue?style=for-the-badge)
 ![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
 ![Zero Dependency](https://img.shields.io/badge/Dependencies-Zero-orange?style=for-the-badge)
+[![Play Online](https://img.shields.io/badge/🎮%20Play%20Online-GitHub%20Pages-success?style=for-the-badge&logo=github)](https://zabaglione.github.io/rouge-3d/)
+
+### 🔗 公開ページ (Live Demo)
+👉 **今すぐブラウザで遊ぶ**: **[https://zabaglione.github.io/rouge-3d/](https://zabaglione.github.io/rouge-3d/)**  
+*(PC・スマートフォン縦持ち両対応)*
 
 ---
 
@@ -75,7 +80,7 @@
    - **Branch**: `main`（または `master`）、フォルダは `/ (root)` を選択。
    - **Save** をクリック。
 4. **公開完了**:
-   - 数十秒で `https://<あなたのユーザー名>.github.io/<リポジトリ名>/` にてゲームが全世界に公開されます！
+   - 数十秒で **[https://zabaglione.github.io/rouge-3d/](https://zabaglione.github.io/rouge-3d/)** にてゲームが全世界に公開されます！
 
 ---
 
