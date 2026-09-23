@@ -1,7 +1,31 @@
 /**
  * メインエントリーポイント
  */
-import { Game } from './engine/Game.js?v=20260924_7';
+import { Game } from './engine/Game.js?v=20260924_8';
+
+// これより短い間隔の2回目のタップはダブルタップ（拡大）とみなして抑止する (ms)
+const DOUBLE_TAP_INTERVAL = 350;
+
+function preventIOSZoom() {
+  // ピンチ拡大（iOS 独自の gesture イベント）
+  for (const type of ['gesturestart', 'gesturechange', 'gestureend']) {
+    document.addEventListener(type, (e) => e.preventDefault(), { passive: false });
+  }
+
+  // ボタン以外の場所（パッドの隙間など）でのダブルタップ拡大。
+  // ボタン上で止めると2回目のクリックが消えるため、ボタン類は CSS の touch-action に任せる
+  let lastTouchEnd = 0;
+  document.addEventListener('touchend', (e) => {
+    const now = Date.now();
+    const isControl = e.target.closest('button, a, input, select, textarea, li');
+    if (!isControl && now - lastTouchEnd <= DOUBLE_TAP_INTERVAL) {
+      e.preventDefault();
+    }
+    lastTouchEnd = now;
+  }, { passive: false });
+
+  document.addEventListener('dblclick', (e) => e.preventDefault(), { passive: false });
+}
 
 window.addEventListener('DOMContentLoaded', () => {
   const canvas = document.getElementById('game-canvas');
@@ -72,6 +96,11 @@ window.addEventListener('DOMContentLoaded', () => {
   new ResizeObserver(syncViewInsets).observe(bottomHudEl);
   const vpadHideBtn = document.getElementById('btn-toggle-vpad-hide');
   if (vpadHideBtn) vpadHideBtn.addEventListener('click', syncViewInsets);
+
+  // iOS Safari の拡大操作を抑止する
+  // （iOS 10 以降の Safari は viewport の user-scalable=no を無視するため、
+  //   パッドの隙間を素早く連打するとダブルタップ拡大され、元のサイズに戻せなくなっていた）
+  preventIOSZoom();
 
   // グローバル露出（デバッグ・テスト用）
   window.__ROGUE_GAME__ = game;

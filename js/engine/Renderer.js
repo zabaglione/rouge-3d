@@ -2,7 +2,7 @@
  * 3Dクォータービュー（立体パースペクティブ）レンダラー
  * 参考画像に準拠した立体石造りの壁・敷石床・ツタ・ランタン台座・モニュメント
  */
-import { CONFIG } from '../config.js?v=20260924_7';
+import { CONFIG } from '../config.js?v=20260924_8';
 
 // 床・通路のすぐ南にある壁は、この高さ(px)の低い縁として描く
 // （壁の高さ WALL_H がタイル奥行き TILE_D より高いため、そのままだと奥の床・通路を覆い隠してしまう）
@@ -12,6 +12,10 @@ const WALL_RIM_H = 8;
 const BANNER_W = 16;
 const BANNER_HEIGHT_RATIO = 0.7;
 const BANNER_TOP_MARGIN = 4;
+
+// 床の岩の大きさ（楕円の半径 px）
+const ROCK_LARGE = { rx: 11, ry: 5 };
+const ROCK_SMALL = { rx: 5, ry: 2.5 };
 
 export class Renderer {
   constructor(canvas) {
@@ -639,45 +643,11 @@ export class Renderer {
         ctx.restore();
       }
 
-      // 2. 広い部屋の中央モニュメント（参考画像の古代羅針盤石碑）
-      if (r.w >= 7 && r.h >= 6 && r.centerY === gy && startGX <= r.centerX && r.centerX <= endGX) {
-        if (game.map.visited[r.centerY][r.centerX]) {
-          const isOccupied = (game.player.x === r.centerX && game.player.y === r.centerY) ||
-                             game.monsters.some(m => m.x === r.centerX && m.y === r.centerY) ||
-                             game.droppedItems.some(it => it.x === r.centerX && it.y === r.centerY);
-
-          if (!isOccupied) {
-            const { x: mx, y: my } = this.gridToScreen(r.centerX, r.centerY);
-            ctx.save();
-            // 台座の円形影
-            ctx.beginPath();
-            ctx.ellipse(mx + tw / 2, my + td / 2, 16, 7, 0, 0, Math.PI * 2);
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
-            ctx.fill();
-
-            // 円形石造り基壇
-            ctx.fillStyle = '#64748b';
-            ctx.beginPath();
-            ctx.ellipse(mx + tw / 2, my + td / 2 - 3, 14, 6, 0, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.strokeStyle = '#94a3b8';
-            ctx.stroke();
-
-            // 中央の石碑（Stele）
-            ctx.fillStyle = '#475569';
-            ctx.fillRect(mx + tw / 2 - 8, my + td / 2 - 18, 16, 15);
-            ctx.strokeStyle = '#94a3b8';
-            ctx.strokeRect(mx + tw / 2 - 8, my + td / 2 - 18, 16, 15);
-
-            // 彫刻（星・羅針盤）
-            ctx.fillStyle = '#fbbf24';
-            ctx.font = '10px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText('✦', mx + tw / 2, my + td / 2 - 10);
-            ctx.restore();
-          }
-        }
+      // 2. 広い部屋の中央に転がる平たい岩（床と同じ石色で、アイテムと紛れないようにする）
+      if (r.w >= 7 && r.h >= 6 && r.centerY === gy && startGX <= r.centerX && r.centerX <= endGX &&
+          game.map.visited[r.centerY][r.centerX] && !this.isTileOccupied(game, r.centerX, r.centerY)) {
+        const { x: sx, y: sy } = this.gridToScreen(r.centerX, r.centerY);
+        this.drawFloorRock(ctx, sx + tw / 2, sy + td / 2, ROCK_LARGE, game.map.visible[r.centerY][r.centerX]);
       }
 
       // 3. 部屋の奥（北）の壁に掛けた旗（タペストリー）
@@ -691,23 +661,38 @@ export class Renderer {
         this.drawWallBanner(ctx, sx + tw / 2, wallSy - wallH + td, wallH, game.map.visible[wallY][bannerX]);
       }
 
-      // 4. 参考画像風の部屋の隅の白野草・薬草（Wildflowers）
-      if (r.w >= 5 && (r.y) === gy && startGX <= (r.x + 1) && (r.x + 1) <= endGX) {
-        const fx = r.x + 1;
-        const fy = r.y;
-        if (game.map.visited[fy][fx]) {
-          const { x: sx, y: sy } = this.gridToScreen(fx, fy);
-          ctx.save();
-          ctx.fillStyle = '#22c55e'; // 葉
-          ctx.fillRect(sx + 6, sy + 6, 2, 6);
-          ctx.fillRect(sx + 10, sy + 8, 2, 5);
-          ctx.fillStyle = '#ffffff'; // 白い花
-          ctx.fillRect(sx + 5, sy + 4, 3, 3);
-          ctx.fillRect(sx + 10, sy + 6, 3, 3);
-          ctx.restore();
-        }
+      // 4. 部屋の隅の小石（床と同じ石色）
+      const pebbleX = r.x + 1;
+      if (r.w >= 5 && r.y === gy && startGX <= pebbleX && pebbleX <= endGX &&
+          game.map.visited[r.y][pebbleX] && !this.isTileOccupied(game, pebbleX, r.y)) {
+        const { x: sx, y: sy } = this.gridToScreen(pebbleX, r.y);
+        this.drawFloorRock(ctx, sx + tw * 0.3, sy + td * 0.35, ROCK_SMALL, game.map.visible[r.y][pebbleX]);
       }
     }
+  }
+
+  // 床に半分埋まった平たい岩（cx, cy: 中心、size: {rx, ry} 半径）
+  // 床の敷石と同系色・無発光・静止にして、浮遊アニメするアイテムと明確に区別する
+  drawFloorRock(ctx, cx, cy, size, isVisible) {
+    ctx.save();
+    // 接地影
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.18)';
+    ctx.beginPath();
+    ctx.ellipse(cx + 1, cy + 2, size.rx, size.ry, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // 岩本体（床の敷石とほぼ同じ色）
+    ctx.fillStyle = isVisible ? '#7f8896' : '#353e4d';
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, size.rx, size.ry, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // 上面のわずかなハイライト
+    if (isVisible) {
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.10)';
+      ctx.beginPath();
+      ctx.ellipse(cx - size.rx * 0.2, cy - size.ry * 0.3, size.rx * 0.55, size.ry * 0.45, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
   }
 
   // 3D罠描画

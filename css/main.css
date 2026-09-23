@@ -42,6 +42,10 @@
   padding: 0;
   user-select: none;
   -webkit-user-select: none;
+  /* iOS Safari のダブルタップ拡大を無効化（touch-action は継承されないため全要素に指定） */
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 html, body {

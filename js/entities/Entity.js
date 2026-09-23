@@ -1,7 +1,7 @@
 /**
  * キャラクター・モンスターの共通基底エンティティ
  */
-import { CONFIG } from '../config.js?v=20260924_7';
+import { CONFIG } from '../config.js?v=20260924_8';
 
 export class Entity {
   constructor(x, y, name) {
