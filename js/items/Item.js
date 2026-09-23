@@ -12,6 +12,10 @@ export const ITEM_TYPES = {
   GOLD: 'gold',
 };
 
+// 床に落ちているゴールドの量： GOLD_BASE + 階層 × GOLD_PER_FLOOR (+ 乱数)
+const GOLD_BASE = 10;
+const GOLD_PER_FLOOR = 15;
+
 // アイテムマスターデータ
 export const ITEM_DEFINITIONS = [
   // --- 武器 ---
@@ -329,6 +333,12 @@ export class Item {
     const def = ITEM_DEFINITIONS.find(d => d.id === defId);
     if (!def) return null;
     return new Item(def, extra);
+  }
+
+  // 床に落ちているゴールド（階層が深いほど多い）
+  static createGold(floorNumber = 1) {
+    const amount = GOLD_BASE + floorNumber * GOLD_PER_FLOOR + Math.floor(Math.random() * GOLD_PER_FLOOR);
+    return new Item({ id: 'gold', name: `${amount} ゴールド`, type: ITEM_TYPES.GOLD, icon: '💰', color: '#fbbf24', desc: 'ゴールドの山。', power: amount });
   }
 
   static getRandomItem(floorNumber = 1) {

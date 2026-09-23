@@ -1,7 +1,7 @@
 /**
  * クラシック『ローグ』×『シレン』風 3x3 グリッド分割プロシージャルダンジョン生成
  */
-import { CONFIG } from '../config.js';
+import { CONFIG } from '../config.js?v=20260924_4';
 
 export class DungeonGenerator {
   constructor(width, height) {
@@ -23,6 +23,7 @@ export class DungeonGenerator {
     }
     this.rooms = [];
     this.corridors = [];
+    this.isMonsterHouse = false;
 
     // 3x3 のグリッド分割
     const gridCols = 3;
@@ -90,16 +91,21 @@ export class DungeonGenerator {
       this.carveCorridor(conn.r1, conn.r2);
     }
 
-    // モンスターハウス抽選（5F以降、確率15%）
+    // 開始部屋と階段部屋を別々にランダム選択（毎回同じ位置だと探索にならない）
+    const pickRoom = (exclude) => {
+      const pool = this.rooms.filter(r => !exclude.includes(r));
+      return pool[Math.floor(Math.random() * pool.length)];
+    };
+    const startRoom = pickRoom([]);
+    const stairsRoom = pickRoom([startRoom]);
+
+    // モンスターハウス抽選（3F以降、確率20%）。開始部屋は除外
     if (floorNumber >= 3 && Math.random() < 0.2) {
-      const mhRoom = this.rooms[Math.floor(Math.random() * this.rooms.length)];
+      const mhRoom = pickRoom([startRoom]);
       mhRoom.isMonsterHouse = true;
       this.isMonsterHouse = true;
     }
 
-    // 階段配置（プレイヤー初期位置部屋とは別の部屋）
-    const startRoom = this.rooms[0];
-    const stairsRoom = this.rooms[this.rooms.length - 1]; // 遠い部屋
     this.stairs = {
       x: stairsRoom.x + Math.floor(stairsRoom.w / 2),
       y: stairsRoom.y + Math.floor(stairsRoom.h / 2),

@@ -1,7 +1,12 @@
 /**
  * SFC風操作系・マルチ入力マネージャー (キーボード, Gamepad API, バーチャルパッド)
  */
-import { CONFIG } from '../config.js';
+import { CONFIG } from '../config.js?v=20260924_4';
+
+// 押している間だけ有効になるモディファイアキー
+const DIAGONAL_KEYS = ['KeyR', 'ControlLeft', 'ControlRight'];
+const FACING_KEYS = ['KeyC', 'AltLeft', 'AltRight'];
+const DASH_KEYS = ['KeyX', 'ShiftLeft', 'ShiftRight'];
 
 export class InputManager {
   constructor() {
@@ -37,42 +42,31 @@ export class InputManager {
   initKeyboardListeners() {
     window.addEventListener('keydown', (e) => {
       // ゲームプレイ中の特定キーのデフォルト動作（スクロールなど）を抑止
-      const preventKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'Tab', 'Alt'];
+      const preventKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'Tab', 'AltLeft', 'AltRight'];
       if (preventKeys.includes(e.code) || e.key === 'Tab') {
         e.preventDefault();
       }
 
+      // e.key は Shift の有無で変わり keyup で消せなくなるため e.code のみ保持する
       this.keys.add(e.code);
-      this.keys.add(e.key);
 
-      // モディファイアキーの即時反映
-      if (e.code === 'KeyR' || e.code === 'ControlLeft' || e.code === 'ControlRight') {
-        this.isDiagonalLock = true;
-      }
-      if (e.code === 'KeyC' || e.code === 'AltLeft' || e.code === 'AltRight' || e.shiftKey) {
-        this.isFacingLock = true;
-      }
-      if (e.code === 'KeyX' || e.shiftKey) {
-        this.isDashHolding = true;
-      }
+      // モディファイア（押している間だけ有効）
+      // Shift はダッシュ専用。以前は向き変更も同時に立てていたうえ keyup で解除されず、
+      // 一度 Shift を押すと以後ずっと「向き変更のみ」で移動できなくなっていた
+      if (DIAGONAL_KEYS.includes(e.code)) this.isDiagonalLock = true;
+      if (FACING_KEYS.includes(e.code)) this.isFacingLock = true;
+      if (DASH_KEYS.includes(e.code)) this.isDashHolding = true;
 
-      // 単発トリガーアクション
+      // 単発トリガーアクション（押しっぱなしのキーリピートでは切替系を連打しない）
       this.handleKeyDownDirect(e);
     });
 
     window.addEventListener('keyup', (e) => {
       this.keys.delete(e.code);
-      this.keys.delete(e.key);
 
-      if (e.code === 'KeyR' || e.code === 'ControlLeft' || e.code === 'ControlRight') {
-        this.isDiagonalLock = false;
-      }
-      if (e.code === 'KeyC' || e.code === 'AltLeft' || e.code === 'AltRight') {
-        this.isFacingLock = false;
-      }
-      if (e.code === 'KeyX' || !e.shiftKey) {
-        this.isDashHolding = false;
-      }
+      if (DIAGONAL_KEYS.includes(e.code)) this.isDiagonalLock = false;
+      if (FACING_KEYS.includes(e.code)) this.isFacingLock = false;
+      if (DASH_KEYS.includes(e.code)) this.isDashHolding = false;
     });
 
     // フォーカス外れ時はリセット
@@ -102,6 +96,10 @@ export class InputManager {
 
   // ダイレクト単発アクション処理
   handleKeyDownDirect(e) {
+    // 開閉・切替系はキーリピートで連続発火させない（足踏み・攻撃は押しっぱなしで連続可）
+    const isToggleKey = ['KeyI', 'KeyE', 'KeyM', 'Tab', 'Escape', 'Backspace'].includes(e.code);
+    if (e.repeat && isToggleKey) return;
+
     // メニュー/インベントリ
     if (e.code === 'KeyI' || e.code === 'KeyE') {
       this.queueAction({ type: 'TOGGLE_INVENTORY' });
@@ -125,11 +123,6 @@ export class InputManager {
     // キャンセル / 閉じる
     if (e.code === 'Escape' || e.code === 'Backspace') {
       this.queueAction({ type: 'CANCEL' });
-      return;
-    }
-    // 斜め切り替えトグル（Shift+R等）
-    if (e.code === 'KeyR' && e.ctrlKey) {
-      this.isDiagonalLock = !this.isDiagonalLock;
       return;
     }
   }
@@ -227,12 +220,12 @@ export class InputManager {
     // 9: Start (メニュー)
     // 12: D-Pad Up, 13: Down, 14: Left, 15: Right
 
-    // 斜めロック状態 (R1 または R2)
-    this.isDiagonalLock = isPressed(5) || this.keys.has('KeyR');
-    // 向き変更状態 (Yボタン または Alt)
-    this.isFacingLock = isPressed(3) || this.keys.has('KeyC') || this.keys.has('AltLeft');
-    // ダッシュホールド (Bボタン または Xキー)
-    this.isDashHolding = isPressed(1) || this.keys.has('KeyX') || this.keys.has('ShiftLeft');
+    // 斜めロック状態 (R1)
+    this.isDiagonalLock = isPressed(5) || DIAGONAL_KEYS.some(k => this.keys.has(k));
+    // 向き変更状態 (Yボタン)
+    this.isFacingLock = isPressed(3) || FACING_KEYS.some(k => this.keys.has(k));
+    // ダッシュホールド (Bボタン)
+    this.isDashHolding = isPressed(1) || DASH_KEYS.some(k => this.keys.has(k));
 
     // ワンショットボタントリガー
     const checkTrigger = (btnIdx, actionType) => {
@@ -245,6 +238,7 @@ export class InputManager {
     };
 
     checkTrigger(0, 'ATTACK'); // Aボタン
+    checkTrigger(1, 'CANCEL'); // Bボタン（持ち物画面ではキャンセル）
     checkTrigger(2, 'TOGGLE_INVENTORY'); // Xボタン
     checkTrigger(4, 'TOGGLE_MAP'); // L1
     checkTrigger(8, 'TOGGLE_MAP'); // Select

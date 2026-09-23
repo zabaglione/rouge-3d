@@ -79,7 +79,7 @@ export class HUD {
         badges += '<span class="badge badge-diagonal">斜め固定中 [R]</span>';
       }
       if (game.input.isFacingLock) {
-        badges += '<span class="badge badge-facing">向き変更中 [Shift]</span>';
+        badges += '<span class="badge badge-facing">向き変更中 [C/Y]</span>';
       }
       this.modeBadgesEl.innerHTML = badges;
     }

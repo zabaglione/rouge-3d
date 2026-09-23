@@ -9,10 +9,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 
-  <link rel="stylesheet" href="css/main.css?v=20260924_3">
-  <link rel="stylesheet" href="css/hud.css?v=20260924_3">
-  <link rel="stylesheet" href="css/inventory.css?v=20260924_3">
-  <link rel="stylesheet" href="css/controls.css?v=20260924_3">
+  <link rel="stylesheet" href="css/main.css?v=20260924_4">
+  <link rel="stylesheet" href="css/hud.css?v=20260924_4">
+  <link rel="stylesheet" href="css/inventory.css?v=20260924_4">
+  <link rel="stylesheet" href="css/controls.css?v=20260924_4">
 </head>
 <body>
   <div id="app-container">
@@ -100,7 +100,7 @@
       <div class="log-window">
         <div class="log-header-bar">
           <span>MESSAGE LOG</span>
-          <button id="btn-expand-logs" class="log-expand-btn">履歴を展開 [L]</button>
+          <button id="btn-expand-logs" class="log-expand-btn">履歴を展開</button>
         </div>
         <div id="log-messages"></div>
       </div>
@@ -216,9 +216,9 @@
             <table class="help-table">
               <tr><td><b>8方向移動</b></td><td><kbd>矢印</kbd> / <kbd>WASD</kbd> / <kbd>テンキー(1-9)</kbd> / スティック</td></tr>
               <tr><td><b>斜め移動固定</b></td><td><kbd>R</kbd> または <kbd>Ctrl</kbd>（斜めのみ移動可能）</td></tr>
-              <tr><td><b>向き変更</b></td><td><kbd>Shift</kbd> または <kbd>C</kbd>（ターン消費なしで方向転換）</td></tr>
-              <tr><td><b>ダッシュ</b></td><td><kbd>X</kbd> + 方向（角・敵に当たるまで一気に直進）</td></tr>
-              <tr><td><b>足踏み</b></td><td><kbd>.</kbd> または <kbd>T</kbd>（その場でHP高速回復）</td></tr>
+              <tr><td><b>向き変更</b></td><td><kbd>C</kbd> または <kbd>Alt</kbd> + 方向（ターン消費なしで方向転換）</td></tr>
+              <tr><td><b>ダッシュ</b></td><td><kbd>Shift</kbd> または <kbd>X</kbd> + 方向（角・敵に当たるまで一気に直進）</td></tr>
+              <tr><td><b>足踏み</b></td><td><kbd>.</kbd> または <kbd>T</kbd>（その場で1ターン経過。押しっぱなしで連続）</td></tr>
               <tr><td><b>攻撃 / 階段</b></td><td><kbd>Space</kbd> / <kbd>Enter</kbd> / <kbd>Z</kbd>（素振りで罠発見）</td></tr>
               <tr><td><b>持ち物袋</b></td><td><kbd>I</kbd> または <kbd>E</kbd></td></tr>
               <tr><td><b>マップ切替</b></td><td><kbd>M</kbd> または <kbd>Tab</kbd>（透過オーバーレイ/ミニ/OFF）</td></tr>
@@ -236,7 +236,7 @@
               <tr><td><b>Yボタン</b></td><td>向き変更モード</td></tr>
               <tr><td><b>R1 / RB</b></td><td>斜め移動固定</td></tr>
               <tr><td><b>L1 / Select</b></td><td>マップ表示切替</td></tr>
-              <tr><td><b>R2 / RT</b></td><td>足踏み（高速HP回復）</td></tr>
+              <tr><td><b>R2 / RT</b></td><td>足踏み（1ターン経過）</td></tr>
             </table>
           </div>
 
@@ -293,6 +293,6 @@
     </div>
   </div>
 
-  <script type="module" src="js/main.js?v=20260924_3"></script>
+  <script type="module" src="js/main.js?v=20260924_4"></script>
 </body>
 </html>

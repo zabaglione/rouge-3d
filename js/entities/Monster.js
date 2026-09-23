@@ -1,9 +1,9 @@
 /**
  * モンスターの定義、出現テーブル、AI行動ロジック（全24種・オリジナルローグ級）
  */
-import { Entity } from './Entity.js';
-import { CONFIG } from '../config.js';
-import { Item } from '../items/Item.js';
+import { Entity } from './Entity.js?v=20260924_4';
+import { CONFIG } from '../config.js?v=20260924_4';
+import { Item } from '../items/Item.js?v=20260924_4';
 
 export const MONSTER_DEFINITIONS = [
   // --- 浅層 (B1〜B4) ---
@@ -414,7 +414,7 @@ export class Monster extends Entity {
     this.triggerDamageAnim();
     // 攻撃されたら目覚める / 金縛り解除 / 擬態解除
     this.statusEffects.sleep = 0;
-    this.statusEffects.paralyzed = false;
+    this.statusEffects.paralyzed = 0;
     this.isAlert = true;
     if (this.isMimic) {
       this.isMimic = false;
@@ -459,8 +459,11 @@ export class Monster extends Entity {
       }
     }
 
-    // 1. プレイヤーに隣接している場合：近接攻撃
-    if (dist === 1) {
+    // 擬態中のミミックはその場から動かない
+    if (this.isMimic) return;
+
+    // 1. プレイヤーに隣接している場合：近接攻撃（壁の角越しには攻撃できない）
+    if (dist === 1 && this.canStepTo(player.x, player.y, game)) {
       this.attackPlayer(player, game);
       return;
     }
@@ -572,7 +575,7 @@ export class Monster extends Entity {
       const steal = Math.min(player.gold, Math.floor(Math.random() * 50) + 20);
       player.gold -= steal;
       this.stolenGold = steal;
-      game.sound.playItemGet();
+      game.sound.playPickup();
       game.addLog(`${this.name}は所持金から ${steal} G を奪い取り、煙のようにワープした！`, 'warning');
       this.teleportAway(game);
       return;
@@ -580,12 +583,12 @@ export class Monster extends Entity {
 
     // アイテム盗み（ニンフ）
     if (this.isItemThief && !this.stolenItem) {
-      const unequipped = game.inventory.items.filter(it => !it.isEquipped);
+      const unequipped = game.inventory.items.filter(it => !game.inventory.isEquipped(it));
       if (unequipped.length > 0) {
         const stolen = unequipped[Math.floor(Math.random() * unequipped.length)];
         game.inventory.removeItem(stolen);
         this.stolenItem = stolen;
-        game.sound.playItemGet();
+        game.sound.playPickup();
         game.addLog(`${this.name}は持ち物袋から【${stolen.name}】を盗み出し、ワープした！`, 'danger');
         this.teleportAway(game);
         return;
@@ -602,13 +605,13 @@ export class Monster extends Entity {
     // 猛毒（ヒドラ）
     if (this.isPoison && Math.random() < 0.4) {
       player.atk = Math.max(2, player.atk - 1);
-      player.statusEffects.poison = true;
+      player.statusEffects.poison = 1;
       game.addLog(`ヒドラの猛毒が体に回り、攻撃力が 1 低下した！`, 'danger');
     }
 
     // 氷結（アイスゴーレム）
     if (this.isFreeze && Math.random() < 0.3) {
-      player.statusEffects.paralyzed = true;
+      player.statusEffects.paralyzed = 1;
       game.addLog(`アイスゴーレムの冷気が体を凍結させ、1ターン動けなくなった！`, 'danger');
     }
   }
@@ -699,11 +702,8 @@ export class Monster extends Entity {
     for (const d of adjacent) {
       const nx = player.x + d.dx;
       const ny = player.y + d.dy;
-      if (game.map.isWalkable(nx, ny) && !game.getMonsterAt(nx, ny)) {
-        this.x = nx;
-        this.y = ny;
-        this.renderX = nx * CONFIG.TILE_SIZE;
-        this.renderY = ny * CONFIG.TILE_SIZE;
+      if (game.isTileFree(nx, ny)) {
+        this.warpTo(nx, ny);
         game.sound.playMagic();
         game.addLog(`${this.name}が次元の裂け目から背後に現れた！`, 'danger');
         break;
@@ -713,12 +713,9 @@ export class Monster extends Entity {
 
   // 逃走ワープ（レプラコーン、ニンフ）
   teleportAway(game) {
-    const p = game.map.getRandomFloorTile();
+    const p = game.findRandomFreeTile();
     if (p) {
-      this.x = p.x;
-      this.y = p.y;
-      this.renderX = p.x * CONFIG.TILE_SIZE;
-      this.renderY = p.y * CONFIG.TILE_SIZE;
+      this.warpTo(p.x, p.y);
       this.isAlert = false;
     }
   }
@@ -748,9 +745,8 @@ export class Monster extends Entity {
       const nx = this.x + c.dx;
       const ny = this.y + c.dy;
 
-      // 壁抜けモンスター判定
-      const canMove = this.canPassWalls ? game.map.isInBounds(nx, ny) : game.map.isWalkable(nx, ny);
-      if (!canMove) continue;
+      // 壁抜け・角抜け判定
+      if (!this.canStepTo(nx, ny, game)) continue;
 
       // 他モンスターとの重なり回避
       const otherM = game.getMonsterAt(nx, ny);
@@ -776,23 +772,29 @@ export class Monster extends Entity {
     const nx = this.x + randDir.dx;
     const ny = this.y + randDir.dy;
 
-    const canMove = this.canPassWalls ? game.map.isInBounds(nx, ny) : game.map.isWalkable(nx, ny);
-    if (canMove && !game.getMonsterAt(nx, ny) && !(nx === game.player.x && ny === game.player.y)) {
+    if (this.canStepTo(nx, ny, game) && !game.getMonsterAt(nx, ny) && !(nx === game.player.x && ny === game.player.y)) {
       this.move(randDir.dx, randDir.dy);
     }
+  }
+
+  // (nx, ny) へ1歩で進めるか（壁抜けモンスター以外は壁と角抜けを禁止）
+  canStepTo(nx, ny, game) {
+    if (this.canPassWalls) return game.map.isInBounds(nx, ny);
+    return game.map.isWalkable(nx, ny) && game.map.canMoveDiagonal(this.x, this.y, nx, ny);
   }
 
   stepOrAttack(dir, game) {
     const nx = this.x + dir.dx;
     const ny = this.y + dir.dy;
 
+    if (!this.canStepTo(nx, ny, game)) return;
+
     if (nx === game.player.x && ny === game.player.y) {
       this.attackPlayer(game.player, game);
       return;
     }
 
-    const canMove = this.canPassWalls ? game.map.isInBounds(nx, ny) : game.map.isWalkable(nx, ny);
-    if (canMove && !game.getMonsterAt(nx, ny)) {
+    if (!game.getMonsterAt(nx, ny)) {
       this.move(dir.dx, dir.dy);
     }
   }

@@ -1,8 +1,8 @@
 /**
  * プレイヤーキャラクターのステータス・行動・成長システム
  */
-import { Entity } from './Entity.js';
-import { CONFIG } from '../config.js';
+import { Entity } from './Entity.js?v=20260924_4';
+import { CONFIG } from '../config.js?v=20260924_4';
 
 export class Player extends Entity {
   constructor(x, y) {
@@ -87,9 +87,9 @@ export class Player extends Entity {
   // 経験値獲得とレベルアップ判定
   gainExp(amount, game) {
     this.exp += amount;
-    const nextExp = this.getNextExp();
 
-    if (this.exp >= nextExp && this.lv < 50) {
+    // 一度に大量の経験値を得た場合は複数レベル上がる
+    while (this.exp >= this.getNextExp() && this.lv < CONFIG.PLAYER_MAX_LV) {
       this.lv++;
       const hpGain = Math.floor(Math.random() * 3) + 4; // 4~6
       const atkGain = Math.floor(Math.random() * 2) + 1; // 1~2

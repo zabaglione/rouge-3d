@@ -2,7 +2,7 @@
  * 3Dクォータービュー（立体パースペクティブ）レンダラー
  * 参考画像に準拠した立体石造りの壁・敷石床・ツタ・ランタン台座・モニュメント
  */
-import { CONFIG } from '../config.js';
+import { CONFIG } from '../config.js?v=20260924_4';
 
 export class Renderer {
   constructor(canvas) {
@@ -722,7 +722,7 @@ export class Renderer {
     } else if (m.statusEffects.confused > 0) {
       ctx.font = '12px sans-serif';
       ctx.fillText('🌀', cx + 12, cy - 26);
-    } else if (m.statusEffects.paralyzed) {
+    } else if (m.statusEffects.paralyzed > 0) {
       ctx.font = '12px sans-serif';
       ctx.fillText('⛓️', cx + 12, cy - 26);
     }

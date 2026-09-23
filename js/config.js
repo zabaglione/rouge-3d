@@ -28,10 +28,12 @@ export const CONFIG = {
   // 最大階層
   MAX_FLOOR: 20,
 
+  // プレイヤーの最大レベル
+  PLAYER_MAX_LV: 50,
+
   // アニメーション設定
   MOVE_ANIM_DURATION: 90, // 歩行移動補間時間 (ms)
   DASH_DELAY: 22, // ダッシュ時の1歩インターバル (ms)
-  REST_DELAY: 45, // 足踏み時の1ターンインターバル (ms)
 
   // 方向定義 (SFC準拠 8方向)
   // dx, dy, 角度, 名称, 矢印記号

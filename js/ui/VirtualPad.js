@@ -1,7 +1,43 @@
 /**
  * 画面上バーチャル十字キー（D-Pad）＆ジョイスティック＆SFCアクションボタン
  */
-import { CONFIG } from '../config.js';
+import { CONFIG } from '../config.js?v=20260924_4';
+
+// ボタン長押し時の連続入力：最初のリピートまでの待ち時間と、その後の間隔 (ms)
+const HOLD_REPEAT_DELAY = 280;
+const HOLD_REPEAT_INTERVAL = 150;
+// ジョイスティック：連続移動の間隔 (ms) とデッドゾーン (px)
+const JOYSTICK_REPEAT_INTERVAL = 160;
+const JOYSTICK_DEADZONE = 15;
+
+// 押した瞬間に fire し、押し続けている間は一定間隔で fire し続ける
+function bindHoldRepeat(el, fire) {
+  let delayTimer = null;
+  let repeatTimer = null;
+
+  const release = () => {
+    clearTimeout(delayTimer);
+    clearInterval(repeatTimer);
+    delayTimer = null;
+    repeatTimer = null;
+  };
+
+  const press = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    release();
+    fire();
+    delayTimer = setTimeout(() => {
+      repeatTimer = setInterval(fire, HOLD_REPEAT_INTERVAL);
+    }, HOLD_REPEAT_DELAY);
+  };
+
+  el.addEventListener('touchstart', press, { passive: false });
+  el.addEventListener('mousedown', press);
+  for (const type of ['touchend', 'touchcancel', 'mouseup', 'mouseleave']) {
+    el.addEventListener(type, release);
+  }
+}
 
 export class VirtualPad {
   constructor(inputManager) {
@@ -27,15 +63,8 @@ export class VirtualPad {
     dpadButtons.forEach(btn => {
       const dirIndex = parseInt(btn.dataset.vdir, 10);
       const dir = CONFIG.DIRECTIONS[dirIndex];
-
-      const handlePress = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        this.input.triggerMovement(dir);
-      };
-
-      btn.addEventListener('touchstart', handlePress, { passive: false });
-      btn.addEventListener('mousedown', handlePress);
+      // 押しっぱなしで歩き続けられるようにする
+      bindHoldRepeat(btn, () => this.input.triggerMovement(dir));
     });
 
     // SFCアクションボタン
@@ -54,7 +83,9 @@ export class VirtualPad {
     bindAction('vbtn-attack', 'ATTACK'); // Aボタン
     bindAction('vbtn-dash', 'DASH');     // Bボタン
     bindAction('vbtn-item', 'TOGGLE_INVENTORY'); // Xボタン
-    bindAction('vbtn-rest', 'REST');     // 足踏み
+    // 足踏み：押しっぱなしで連続ターン送り
+    const restBtn = document.getElementById('vbtn-rest');
+    if (restBtn) bindHoldRepeat(restBtn, () => this.input.queueAction({ type: 'REST' }));
     bindAction('vbtn-map', 'TOGGLE_MAP'); // マップ切替
 
     // Yボタン（向き変更トグル/ホールド）
@@ -113,9 +144,18 @@ export class VirtualPad {
     let isDragging = false;
     let baseRect = null;
     let joyTimer = null;
+    let touchId = null; // スティックを操作している指（他の指のボタン操作と混同しない）
+
+    // イベントからスティック操作中の指の座標を取り出す（該当する指が無ければ null）
+    const getPoint = (e) => {
+      if (!e.changedTouches) return e;
+      return Array.from(e.touches).find(t => t.identifier === touchId) || null;
+    };
 
     const startDrag = (e) => {
+      e.preventDefault();
       isDragging = true;
+      touchId = e.changedTouches ? e.changedTouches[0].identifier : null;
       baseRect = this.joystickEl.getBoundingClientRect();
       handleMove(e);
 
@@ -125,13 +165,15 @@ export class VirtualPad {
         if (isDragging && this.currentJoyDir) {
           this.input.triggerMovement(this.currentJoyDir);
         }
-      }, 160);
+      }, JOYSTICK_REPEAT_INTERVAL);
     };
 
     const handleMove = (e) => {
       if (!isDragging || !baseRect) return;
-      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      const point = getPoint(e);
+      if (!point) return;
+      const clientX = point.clientX;
+      const clientY = point.clientY;
 
       const centerX = baseRect.left + baseRect.width / 2;
       const centerY = baseRect.top + baseRect.height / 2;
@@ -149,7 +191,7 @@ export class VirtualPad {
       this.stickKnobEl.style.transform = `translate(${dx}px, ${dy}px)`;
 
       // デッドゾーン
-      if (dist > 15) {
+      if (dist > JOYSTICK_DEADZONE) {
         const angle = Math.atan2(dy, dx);
         const octant = Math.round((8 * angle) / (2 * Math.PI) + 8) % 8;
         const octantMap = [
@@ -168,8 +210,12 @@ export class VirtualPad {
       }
     };
 
-    const endDrag = () => {
+    const endDrag = (e) => {
+      if (!isDragging) return;
+      // 別の指（Aボタン等）を離しただけならスティック操作は継続
+      if (e && e.changedTouches && !Array.from(e.changedTouches).some(t => t.identifier === touchId)) return;
       isDragging = false;
+      touchId = null;
       this.currentJoyDir = null;
       this.stickKnobEl.style.transform = 'translate(0px, 0px)';
       if (joyTimer) {
@@ -181,6 +227,7 @@ export class VirtualPad {
     this.joystickEl.addEventListener('touchstart', startDrag, { passive: false });
     window.addEventListener('touchmove', handleMove, { passive: false });
     window.addEventListener('touchend', endDrag);
+    window.addEventListener('touchcancel', endDrag);
 
     this.joystickEl.addEventListener('mousedown', startDrag);
     window.addEventListener('mousemove', handleMove);

@@ -1,7 +1,7 @@
 /**
  * キャラクター・モンスターの共通基底エンティティ
  */
-import { CONFIG } from '../config.js';
+import { CONFIG } from '../config.js?v=20260924_4';
 
 export class Entity {
   constructor(x, y, name) {
@@ -26,7 +26,7 @@ export class Entity {
     this.statusEffects = {
       sleep: 0,
       confused: 0,
-      paralyzed: false,
+      paralyzed: 0, // 残りターン数（Infinity は攻撃を受けるまで解けない金縛り）
       speed: 0,
       poison: 0,
     };
@@ -38,6 +38,13 @@ export class Entity {
     this.y = newY;
     this.targetRenderX = newX * CONFIG.TILE_SIZE;
     this.targetRenderY = newY * CONFIG.TILE_SIZE;
+  }
+
+  // 瞬間移動（ワープ）：描画座標も即座に移す（補間させると旧位置に残って見える）
+  warpTo(newX, newY) {
+    this.moveTo(newX, newY);
+    this.renderX = this.targetRenderX;
+    this.renderY = this.targetRenderY;
   }
 
   // 相対移動
@@ -72,9 +79,10 @@ export class Entity {
     if (this.statusEffects.confused > 0) this.statusEffects.confused--;
     if (this.statusEffects.speed > 0) this.statusEffects.speed--;
     if (this.statusEffects.poison > 0) this.statusEffects.poison--;
+    if (this.statusEffects.paralyzed > 0) this.statusEffects.paralyzed--;
   }
 
   canAct() {
-    return this.statusEffects.sleep <= 0 && !this.statusEffects.paralyzed;
+    return this.statusEffects.sleep <= 0 && this.statusEffects.paralyzed <= 0;
   }
 }

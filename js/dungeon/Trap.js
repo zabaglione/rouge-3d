@@ -40,12 +40,13 @@ export const TRAP_TYPES = {
       game.animations.addExplosion(player.x, player.y);
       game.addLog(`地雷が爆発した！ HPが半分（-${dmg}）になった！`, 'danger');
       game.sound.playHit();
-      // 周囲の敵にも大ダメージ
-      for (const m of game.monsters) {
+      // 周囲の敵にも大ダメージ（倒れた敵は撃破処理して盤面から除く）
+      for (const m of [...game.monsters]) {
         const dist = Math.max(Math.abs(m.x - player.x), Math.abs(m.y - player.y));
         if (dist <= 1) {
           m.takeDamage(30);
           game.addLog(`爆風が${m.name}を巻き込んだ！ (30ダメージ)`, 'normal');
+          if (m.isDead()) game.handleMonsterDefeat(m);
         }
       }
     }
@@ -57,10 +58,9 @@ export const TRAP_TYPES = {
     icon: '🌀',
     desc: '異空間へ飛ばされ、フロアの別の場所へワープする！',
     trigger: (player, game) => {
-      const p = game.map.getRandomFloorTile();
+      const p = game.findRandomFreeTile();
       if (p) {
-        player.x = p.x;
-        player.y = p.y;
+        player.warpTo(p.x, p.y);
         game.updateVisibility();
         game.addLog('ワープの罠だ！ 別の場所へ飛ばされた！', 'accent');
         game.sound.playMagic();

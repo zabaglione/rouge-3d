@@ -1,8 +1,8 @@
 /**
  * ダンジョンマップ状態管理・視界 (FoV)・通行/角抜け判定
  */
-import { CONFIG } from '../config.js';
-import { Trap, TRAP_TYPES } from './Trap.js';
+import { CONFIG } from '../config.js?v=20260924_4';
+import { Trap, TRAP_TYPES } from './Trap.js?v=20260924_4';
 
 export class DungeonMap {
   constructor(width, height) {
@@ -44,6 +44,11 @@ export class DungeonMap {
 
   getTrapAt(x, y) {
     return this.traps.find(t => t.x === x && t.y === y) || null;
+  }
+
+  // マップ内側（外周の壁を除く）か。壁抜けモンスターの移動範囲
+  isInBounds(x, y) {
+    return x >= 1 && x < this.width - 1 && y >= 1 && y < this.height - 1;
   }
 
   // タイル取得

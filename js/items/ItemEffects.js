@@ -1,7 +1,11 @@
 /**
  * アイテム使用・読解・振下・投擲時の効果ロジック
  */
-import { ITEM_TYPES, Item } from './Item.js?v=20260924_3';
+import { ITEM_TYPES, Item } from './Item.js?v=20260924_4';
+
+// 衝撃波の杖：吹き飛ばす最大距離と激突ダメージ
+const KNOCKBACK_DISTANCE = 10;
+const KNOCKBACK_DAMAGE = 5;
 
 export class ItemEffectHandler {
   constructor(game) {
@@ -49,7 +53,7 @@ export class ItemEffectHandler {
       this.game.addLog(`${item.name}を飲んだ！ 体が軽くなり、倍速で行動できるようになった！`, 'buff');
     } else if (item.id === 'herb_poison_cure') {
       player.atk = player.baseAtk;
-      delete player.statusEffects.poison;
+      player.statusEffects.poison = 0;
       this.game.sound.playHeal();
       this.game.addLog(`${item.name}を飲んだ！ 毒が消え、力が完全に回復した！`, 'heal');
     } else if (item.id === 'herb_fire') {
@@ -93,10 +97,9 @@ export class ItemEffectHandler {
       }
       this.game.addLog(`${item.name}を読んだ！ 部屋中のモンスターが深い眠りに落ちた！`, 'accent');
     } else if (item.id === 'scr_warp') {
-      const p = this.game.map.getRandomFloorTile();
+      const p = this.game.findRandomFreeTile();
       if (p) {
-        player.x = p.x;
-        player.y = p.y;
+        player.warpTo(p.x, p.y);
         this.game.updateVisibility();
         this.game.addLog(`${item.name}を読んだ！ 風に包まれ、フロアの別の場所へ転移した！`, 'accent');
       }
@@ -133,20 +136,18 @@ export class ItemEffectHandler {
 
       if (item.id === 'stf_blow') {
         // 吹き飛ばし
-        this.knockbackMonster(targetMonster, dir, 8);
+        this.knockbackMonster(targetMonster, dir, KNOCKBACK_DISTANCE);
       } else if (item.id === 'stf_swap') {
         // 場所替え
         const origX = player.x;
         const origY = player.y;
-        player.x = targetMonster.x;
-        player.y = targetMonster.y;
-        targetMonster.x = origX;
-        targetMonster.y = origY;
+        player.warpTo(targetMonster.x, targetMonster.y);
+        targetMonster.warpTo(origX, origY);
         this.game.updateVisibility();
         this.game.addLog(`${targetMonster.name}と位置が瞬時に入れ替わった！`, 'accent');
       } else if (item.id === 'stf_paralyze') {
         // 金縛り
-        targetMonster.statusEffects.paralyzed = true;
+        targetMonster.statusEffects.paralyzed = Infinity; // 攻撃を受けるまで解けない
         this.game.addLog(`${targetMonster.name}は金縛りになり、カチコチに固まった！`, 'accent');
       } else if (item.id === 'stf_thunder') {
         // 雷撃
@@ -325,9 +326,9 @@ export class ItemEffectHandler {
       // 壁または他のモンスターに激突
       if (!this.game.map.isWalkable(nx, ny) || this.game.getMonsterAt(nx, ny) || (nx === this.game.player.x && ny === this.game.player.y)) {
         // 激突ダメージ
-        monster.takeDamage(5);
-        this.game.animations.addDamageNumber(monster.x, monster.y, 5, '#ef4444');
-        this.game.addLog(`${monster.name}は壁に激突して 5 のダメージを受けた！`, 'danger');
+        monster.takeDamage(KNOCKBACK_DAMAGE);
+        this.game.animations.addDamageNumber(curX, curY, KNOCKBACK_DAMAGE, '#ef4444');
+        this.game.addLog(`${monster.name}は激突して ${KNOCKBACK_DAMAGE} のダメージを受けた！`, 'danger');
         break;
       }
 
@@ -336,8 +337,7 @@ export class ItemEffectHandler {
       traveled++;
     }
 
-    monster.x = curX;
-    monster.y = curY;
+    monster.moveTo(curX, curY);
     this.game.sound.playHit();
     if (monster.isDead()) {
       this.game.handleMonsterDefeat(monster);

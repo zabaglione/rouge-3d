@@ -163,6 +163,12 @@ export class InventoryUI {
 
     this.close();
 
+    // 眠り・金縛り中はアイテムを使えない（説明を見るだけは可）
+    if (cmdId !== 'info' && !this.game.player.canAct()) {
+      this.game.addLog('体が動かず、アイテムを使えない！', 'warning');
+      return;
+    }
+
     switch (cmdId) {
       case 'equip':
       case 'unequip':
