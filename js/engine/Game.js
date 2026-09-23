@@ -4,19 +4,22 @@
 import { CONFIG } from '../config.js';
 import { sound } from './Audio.js';
 import { InputManager } from './Input.js';
-import { Renderer } from './Renderer.js?v=20260924_2';
+import { Renderer } from './Renderer.js?v=20260924_3';
 import { AnimationEngine } from './Animation.js';
 import { DungeonGenerator } from '../dungeon/DungeonGen.js';
 import { DungeonMap } from '../dungeon/Map.js';
 import { Player } from '../entities/Player.js';
-import { Monster } from '../entities/Monster.js?v=20260924_2';
-import { Item, ITEM_TYPES } from '../items/Item.js?v=20260924_2';
+import { Monster } from '../entities/Monster.js?v=20260924_3';
+import { Item, ITEM_TYPES } from '../items/Item.js?v=20260924_3';
 import { Inventory } from '../items/Inventory.js';
-import { ItemEffectHandler } from '../items/ItemEffects.js';
+import { ItemEffectHandler } from '../items/ItemEffects.js?v=20260924_3';
 import { HUD } from '../ui/HUD.js';
-import { InventoryUI } from '../ui/InventoryUI.js';
-import { OverlayMap } from '../ui/OverlayMap.js?v=20260924_2';
-import { VirtualPad } from '../ui/VirtualPad.js?v=20260924_2';
+import { InventoryUI } from '../ui/InventoryUI.js?v=20260924_3';
+import { OverlayMap } from '../ui/OverlayMap.js?v=20260924_3';
+import { VirtualPad } from '../ui/VirtualPad.js?v=20260924_3';
+
+// アイテムが既存アイテムと重ならないよう転がる最大距離（マス）
+const ITEM_SCATTER_RADIUS = 3;
 
 export const GAME_STATES = {
   TITLE: 'title',
@@ -135,6 +138,9 @@ export class Game {
     // 視界更新
     this.updateVisibility();
 
+    // 床アイテムをリセット（モンスターハウスのアイテム配置より前に行う）
+    this.droppedItems = [];
+
     // モンスター生成（階層に応じて4〜8匹、モンスターハウスなら+10匹）
     this.monsters = [];
     const monsterCount = Math.floor(Math.random() * 4) + 4 + Math.floor(floorNumber * 0.5);
@@ -158,27 +164,16 @@ export class Game {
         // アイテムも大盤振る舞い
         for (let i = 0; i < 6; i++) {
           const p = this.map.getRandomFloorTile(mhRoom);
-          if (p) {
-            const item = Item.getRandomItem(floorNumber);
-            item.x = p.x;
-            item.y = p.y;
-            this.droppedItems.push(item);
-          }
+          if (p) this.placeItem(Item.getRandomItem(floorNumber), p.x, p.y);
         }
       }
     }
 
     // アイテム生成（フロアに4〜7個配置）
-    this.droppedItems = [];
     const itemCount = Math.floor(Math.random() * 4) + 4;
     for (let i = 0; i < itemCount; i++) {
       const p = this.map.getRandomFloorTile();
-      if (p && !(p.x === this.player.x && p.y === this.player.y)) {
-        const item = Item.getRandomItem(floorNumber);
-        item.x = p.x;
-        item.y = p.y;
-        this.droppedItems.push(item);
-      }
+      if (p) this.placeItem(Item.getRandomItem(floorNumber), p.x, p.y);
     }
 
     // トラップ生成（フロアに3〜6個配置）
@@ -424,9 +419,7 @@ export class Game {
     // 盗まれたアイテムを取り戻す
     if (monster.stolenItem) {
       const drop = monster.stolenItem;
-      drop.x = monster.x;
-      drop.y = monster.y;
-      this.droppedItems.push(drop);
+      this.placeItem(drop, monster.x, monster.y);
       this.addLog(`盗まれていた【${drop.name}】を取り戻した！`, 'accent');
     }
 
@@ -439,10 +432,9 @@ export class Game {
     // ドロップアイテム抽選（25%）
     if (Math.random() < 0.25) {
       const drop = Item.getRandomItem(this.currentFloor);
-      drop.x = monster.x;
-      drop.y = monster.y;
-      this.droppedItems.push(drop);
-      this.addLog(`${monster.name}は【${drop.name}】を落とした！`, 'accent');
+      if (this.placeItem(drop, monster.x, monster.y)) {
+        this.addLog(`${monster.name}は【${drop.name}】を落とした！`, 'accent');
+      }
     }
 
     // 配列から除外
@@ -450,6 +442,38 @@ export class Game {
     if (idx !== -1) {
       this.monsters.splice(idx, 1);
     }
+  }
+
+  // (x, y) から最も近い「歩ける・アイテムが無い・プレイヤーがいない」マスを探す
+  // 同じマスにアイテムが重なると1つしか拾えず、残りが床に残って見えるため
+  findItemDropPos(x, y) {
+    const isFree = (nx, ny) =>
+      this.map.isWalkable(nx, ny) &&
+      !(nx === this.player.x && ny === this.player.y) &&
+      !this.droppedItems.some(i => i.x === nx && i.y === ny);
+
+    for (let r = 0; r <= ITEM_SCATTER_RADIUS; r++) {
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+          if (isFree(x + dx, y + dy)) return { x: x + dx, y: y + dy };
+        }
+      }
+    }
+    return null;
+  }
+
+  // アイテムを床に置く（重なる場合は近くの空きマスへ転がる）。置けなければ false
+  placeItem(item, x, y) {
+    const pos = this.findItemDropPos(x, y);
+    if (!pos) {
+      this.addLog(`【${item.name}】はどこかへ転がって消えてしまった…`, 'warning');
+      return false;
+    }
+    item.x = pos.x;
+    item.y = pos.y;
+    this.droppedItems.push(item);
+    return true;
   }
 
   // 足元アイテムの自動拾得または足元確認

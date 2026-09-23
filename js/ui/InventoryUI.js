@@ -28,6 +28,15 @@ export class InventoryUI {
     if (closeBtn) {
       closeBtn.addEventListener('click', () => this.close());
     }
+
+    // 足元アイテムを拾う（ワープ等でアイテムの上に着地した場合用）
+    if (this.underfootBannerEl) {
+      this.underfootBannerEl.addEventListener('click', (e) => {
+        if (!e.target.closest('.underfoot-pickup-btn')) return;
+        this.game.checkUnderfoot();
+        this.render();
+      });
+    }
   }
 
   open() {
@@ -69,7 +78,8 @@ export class InventoryUI {
     if (this.underfootBannerEl) {
       if (underfoot) {
         this.underfootBannerEl.classList.remove('hidden');
-        this.underfootBannerEl.innerHTML = `足元: <span class="text-amber-400">${underfoot.icon} ${underfoot.getDisplayName()}</span>`;
+        this.underfootBannerEl.innerHTML = `足元: <span class="text-amber-400">${underfoot.icon} ${underfoot.getDisplayName()}</span>
+          <button type="button" class="underfoot-pickup-btn">拾う</button>`;
       } else {
         this.underfootBannerEl.classList.add('hidden');
       }
@@ -193,6 +203,10 @@ export class InventoryUI {
         break;
 
       case 'drop':
+        if (this.game.getItemUnderfoot()) {
+          this.game.addLog('足元にはすでにアイテムがあるので置けない。', 'warning');
+          break;
+        }
         this.game.inventory.removeItem(item);
         item.x = this.game.player.x;
         item.y = this.game.player.y;

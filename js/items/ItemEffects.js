@@ -1,7 +1,7 @@
 /**
  * アイテム使用・読解・振下・投擲時の効果ロジック
  */
-import { ITEM_TYPES } from './Item.js';
+import { ITEM_TYPES, Item } from './Item.js?v=20260924_3';
 
 export class ItemEffectHandler {
   constructor(game) {
@@ -187,12 +187,12 @@ export class ItemEffectHandler {
         }
       } else {
         // 地面に落ちる
-        const droppedArrow = item.clone ? item.clone() : Object.assign({}, item);
+        // 素のオブジェクトだと getDisplayName が無く拾得時に例外になるため Item として生成
+        const droppedArrow = Item.createFromDef(item.id);
         droppedArrow.count = 1;
-        droppedArrow.x = hitX;
-        droppedArrow.y = hitY;
-        this.game.droppedItems.push(droppedArrow);
-        this.game.addLog(`矢は地面（${hitX}, ${hitY}）に落ちた。`, 'normal');
+        if (this.game.placeItem(droppedArrow, hitX, hitY)) {
+          this.game.addLog('矢は地面に落ちた。', 'normal');
+        }
       }
     });
 
@@ -236,10 +236,9 @@ export class ItemEffectHandler {
         }
       } else {
         // 地面に落ちる
-        item.x = hitX;
-        item.y = hitY;
-        this.game.droppedItems.push(item);
-        this.game.addLog(`${item.name}は地面に落ちた。`, 'normal');
+        if (this.game.placeItem(item, hitX, hitY)) {
+          this.game.addLog(`${item.name}は地面に落ちた。`, 'normal');
+        }
       }
     });
 

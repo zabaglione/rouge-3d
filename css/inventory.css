@@ -29,6 +29,20 @@
   border-radius: 6px;
   font-size: 0.85rem;
   margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.underfoot-pickup-btn {
+  margin-left: auto;
+  background: rgba(245, 158, 11, 0.25);
+  border: 1px solid rgba(245, 158, 11, 0.7);
+  color: #fde68a;
+  border-radius: 4px;
+  padding: 2px 10px;
+  font-size: 0.8rem;
+  cursor: pointer;
 }
 
 /* メインリストエリア */
