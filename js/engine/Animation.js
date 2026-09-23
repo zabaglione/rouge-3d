@@ -1,7 +1,7 @@
 /**
  * 60FPS パーティクル・アニメーション・フローティングテキスト演出エンジン
  */
-import { CONFIG } from '../config.js?v=20260924_8';
+import { CONFIG } from '../config.js?v=20260924_10';
 
 export class AnimationEngine {
   constructor() {

@@ -2,7 +2,7 @@
  * 3Dクォータービュー（立体パースペクティブ）レンダラー
  * 参考画像に準拠した立体石造りの壁・敷石床・ツタ・ランタン台座・モニュメント
  */
-import { CONFIG } from '../config.js?v=20260924_8';
+import { CONFIG } from '../config.js?v=20260924_10';
 
 // 床・通路のすぐ南にある壁は、この高さ(px)の低い縁として描く
 // （壁の高さ WALL_H がタイル奥行き TILE_D より高いため、そのままだと奥の床・通路を覆い隠してしまう）
@@ -16,6 +16,14 @@ const BANNER_TOP_MARGIN = 4;
 // 床の岩の大きさ（楕円の半径 px）
 const ROCK_LARGE = { rx: 11, ry: 5 };
 const ROCK_SMALL = { rx: 5, ry: 2.5 };
+
+// 下り階段の描画：石の縁の幅(px)、段数、奥の段ほど狭める割合、段の明るさ(%)
+const STAIRS_RIM = 4;
+const STAIRS_STEPS = 4;
+const STAIRS_NARROWING = 0.35;
+const STAIRS_TOP_LIGHT = 62;
+const STAIRS_LIGHT_FALLOFF = 45;
+const STAIRS_MEMORY_LIGHT = 22;
 
 export class Renderer {
   constructor(canvas) {
@@ -306,33 +314,51 @@ export class Renderer {
         ctx.shadowBlur = 0;
       }
     } else if (tile === CONFIG.TILES.STAIRS_DOWN) {
-      // 階段：地下へ降りる古代石造りの段差ハッチ
-      ctx.fillStyle = '#0a0f1d';
-      ctx.fillRect(sx, sy, tw - 1, td - 1);
-
-      // 立体石段ステップ
-      const stepCount = 4;
-      for (let s = 0; s < stepCount; s++) {
-        const stepY = sy + (s * (td / stepCount));
-        const stepH = td / stepCount;
-        ctx.fillStyle = s % 2 === 0 ? '#334155' : '#475569';
-        ctx.fillRect(sx + 4, stepY, tw - 8, stepH);
-      }
-
-      ctx.strokeStyle = '#38bdf8';
-      ctx.lineWidth = 2;
-      ctx.shadowColor = '#38bdf8';
-      ctx.shadowBlur = 12;
-      ctx.strokeRect(sx + 3, sy + 3, tw - 7, td - 7);
-      ctx.shadowBlur = 0;
-
-      ctx.font = '16px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('⚡', sx + tw / 2, sy + td / 2);
+      this.drawStairsDown(ctx, sx, sy, tw, td, isVisible);
     }
 
     ctx.restore();
+  }
+
+  // 下り階段：奥へ行くほど狭く暗くなる石段で「下へ降りる穴」を表現する
+  drawStairsDown(ctx, sx, sy, tw, td, isVisible) {
+    const inset = STAIRS_RIM;
+    const left = sx + inset;
+    const top = sy + inset;
+    const w = tw - inset * 2;
+    const h = td - inset * 2;
+
+    // 石の縁と、その内側の暗い穴
+    ctx.fillStyle = isVisible ? '#94a3b8' : '#3a4454';
+    ctx.fillRect(sx + 1, sy + 1, tw - 2, td - 2);
+    ctx.fillStyle = '#05080f';
+    ctx.fillRect(left, top, w, h);
+
+    // 手前（下）から奥（上）へ、段ごとに幅を狭め・暗くしていく
+    for (let i = 0; i < STAIRS_STEPS; i++) {
+      const t = i / STAIRS_STEPS;
+      const stepH = h / STAIRS_STEPS;
+      const shrink = w * STAIRS_NARROWING * t;
+      const y = top + h - stepH * (i + 1);
+      const lightness = isVisible ? Math.round(STAIRS_TOP_LIGHT - t * STAIRS_LIGHT_FALLOFF) : STAIRS_MEMORY_LIGHT;
+      ctx.fillStyle = `hsl(215, 18%, ${lightness}%)`;
+      ctx.fillRect(left + shrink / 2, y + 1, w - shrink, stepH - 1);
+      // 段鼻（各段の手前の縁）のハイライト
+      if (isVisible) {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+        ctx.fillRect(left + shrink / 2, y + stepH - 2, w - shrink, 1);
+      }
+    }
+
+    // 目立たせるための青い光の縁取り
+    if (isVisible) {
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 2;
+      ctx.shadowColor = '#38bdf8';
+      ctx.shadowBlur = 10;
+      ctx.strokeRect(sx + 1.5, sy + 1.5, tw - 3, td - 3);
+      ctx.shadowBlur = 0;
+    }
   }
 
   // 壁の描画高さ：真上（奥）に床・通路があれば、それを覆い隠さない高さまで低くする

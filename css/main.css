@@ -58,6 +58,22 @@ html, body {
   touch-action: none;
 }
 
+/* ページが拡大された時だけ表示する「元のサイズに戻す」ボタン（位置と拡大率は JS で設定） */
+#zoom-reset-btn {
+  position: absolute;
+  z-index: 1000;
+  transform-origin: top left;
+  padding: 8px 14px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #0b1220;
+  background: var(--accent-gold);
+  border: 2px solid #fde68a;
+  border-radius: 8px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6);
+  cursor: pointer;
+}
+
 /* メインアプリケーションコンテナ */
 #app-container {
   position: relative;

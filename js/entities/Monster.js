@@ -1,9 +1,9 @@
 /**
  * モンスターの定義、出現テーブル、AI行動ロジック（全24種・オリジナルローグ級）
  */
-import { Entity } from './Entity.js?v=20260924_8';
-import { CONFIG } from '../config.js?v=20260924_8';
-import { Item } from '../items/Item.js?v=20260924_8';
+import { Entity } from './Entity.js?v=20260924_10';
+import { CONFIG } from '../config.js?v=20260924_10';
+import { Item } from '../items/Item.js?v=20260924_10';
 
 export const MONSTER_DEFINITIONS = [
   // --- 浅層 (B1〜B4) ---
