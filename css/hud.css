@@ -75,6 +75,7 @@
 }
 
 .gauge-track {
+  position: relative;
   width: 100%;
   height: 7px;
   background: rgba(30, 41, 59, 0.8);
@@ -86,6 +87,20 @@
 .gauge-fill {
   height: 100%;
   transition: width 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* HPが削られた分を白く残し、少し遅れて縮める */
+.gauge-trail {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: rgba(248, 250, 252, 0.85);
+  transition: width 0.45s ease-out 0.35s;
+}
+
+.gauge-trail + .gauge-fill {
+  position: relative;
 }
 
 .gauge-hp {
@@ -403,4 +418,22 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
+}
+
+/* 被弾時にHP表示を揺らす */
+.hud-hit {
+  animation: hudHit 0.32s ease-out;
+}
+
+@keyframes hudHit {
+  0% { transform: translateX(0); }
+  20% { transform: translateX(-4px); color: #f87171; }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(2px); }
+  100% { transform: translateX(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hud-hit { animation: none; }
 }

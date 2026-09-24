@@ -1,11 +1,14 @@
 /**
  * アイテム使用・読解・振下・投擲時の効果ロジック
  */
-import { ITEM_TYPES, Item } from './Item.js?v=20260924_10';
+import { ITEM_TYPES, Item } from './Item.js?v=20260924_11';
+import { fxClock } from '../engine/FxClock.js?v=20260924_11';
 
 // 衝撃波の杖：吹き飛ばす最大距離と激突ダメージ
 const KNOCKBACK_DISTANCE = 10;
 const KNOCKBACK_DAMAGE = 5;
+// 投げた物・矢が敵に届くまでの時間 (ms)。命中の演出はこの分だけ遅らせる
+const PROJECTILE_FLIGHT_MS = 170;
 
 export class ItemEffectHandler {
   constructor(game) {
@@ -152,6 +155,7 @@ export class ItemEffectHandler {
       } else if (item.id === 'stf_thunder') {
         // 雷撃
         this.game.sound.playHit();
+        this.game.impactFx(targetMonster, player.facing);
         targetMonster.takeDamage(25);
         this.game.animations.addDamageNumber(targetMonster.x, targetMonster.y, 25, '#facc15');
         this.game.addLog(`激しい稲妻が${targetMonster.name}を直撃！ 25のダメージ！`, 'accent');
@@ -179,6 +183,7 @@ export class ItemEffectHandler {
     this.shootProjectile(player.x, player.y, dir, item.icon, (monster, hitX, hitY) => {
       if (monster) {
         this.game.sound.playHit();
+        this.game.impactFx(monster, dir);
         const dmg = item.power + Math.floor(player.atk * 0.5);
         monster.takeDamage(dmg);
         this.game.animations.addDamageNumber(monster.x, monster.y, dmg, '#ffffff');
@@ -210,6 +215,7 @@ export class ItemEffectHandler {
     this.shootProjectile(player.x, player.y, dir, item.icon, (monster, hitX, hitY) => {
       if (monster) {
         this.game.sound.playHit();
+        this.game.impactFx(monster, dir);
         // アイテム種別ごとの命中効果
         if (item.type === ITEM_TYPES.HERB) {
           if (item.id === 'herb_high_heal') {
@@ -299,7 +305,13 @@ export class ItemEffectHandler {
       const m = this.game.getMonsterAt(nextX, nextY);
       if (m) {
         this.game.animations.addProjectile(startX, startY, nextX, nextY, icon);
-        callback(m, nextX, nextY);
+        // 命中の演出は、飛んでいった物が届いた瞬間に合わせる
+        fxClock.delayMs = PROJECTILE_FLIGHT_MS;
+        try {
+          callback(m, nextX, nextY);
+        } finally {
+          fxClock.delayMs = 0;
+        }
         return;
       }
 
@@ -339,6 +351,7 @@ export class ItemEffectHandler {
 
     monster.moveTo(curX, curY);
     this.game.sound.playHit();
+    this.game.impactFx(monster, dir, true);
     if (monster.isDead()) {
       this.game.handleMonsterDefeat(monster);
     }
@@ -350,6 +363,7 @@ export class ItemEffectHandler {
     this.shootBeam(player.x, player.y, dir, (monster, hitX, hitY) => {
       if (monster) {
         this.game.sound.playHit();
+        this.game.impactFx(monster, dir, true);
         monster.takeDamage(dmg);
         this.game.animations.addDamageNumber(monster.x, monster.y, dmg, '#ef4444');
         this.game.addLog(`紅蓮の炎が${monster.name}を焼き尽くす！ ${dmg}のダメージ！`, 'danger');

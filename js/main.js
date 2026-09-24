@@ -1,7 +1,7 @@
 /**
  * メインエントリーポイント
  */
-import { Game } from './engine/Game.js?v=20260924_10';
+import { Game } from './engine/Game.js?v=20260924_11';
 
 // これより短い間隔の2回目のタップはダブルタップ（拡大）とみなして抑止する (ms)
 const DOUBLE_TAP_INTERVAL = 350;

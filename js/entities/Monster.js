@@ -1,9 +1,9 @@
 /**
  * モンスターの定義、出現テーブル、AI行動ロジック（全24種・オリジナルローグ級）
  */
-import { Entity } from './Entity.js?v=20260924_10';
-import { CONFIG } from '../config.js?v=20260924_10';
-import { Item } from '../items/Item.js?v=20260924_10';
+import { Entity } from './Entity.js?v=20260924_11';
+import { CONFIG } from '../config.js?v=20260924_11';
+import { Item } from '../items/Item.js?v=20260924_11';
 
 export const MONSTER_DEFINITIONS = [
   // --- 浅層 (B1〜B4) ---
@@ -536,6 +536,7 @@ export class Monster extends Entity {
   // 近接攻撃（特殊付加効果を含む）
   attackPlayer(player, game) {
     this.triggerAttackAnim();
+    player.setHitFrom(this);
     game.sound.playPlayerDamage();
 
     // 防御計算
@@ -619,6 +620,7 @@ export class Monster extends Entity {
   // ドラゴンの火炎ブレス
   breatheFire(player, game) {
     this.triggerAttackAnim();
+    player.setHitFrom(this);
     game.sound.playMagic();
     game.animations.addBeam(this.x, this.y, player.x, player.y, '#ef4444');
 
@@ -631,6 +633,7 @@ export class Monster extends Entity {
   // スケルトン射手の狙撃
   shootRanged(player, game) {
     this.triggerAttackAnim();
+    player.setHitFrom(this);
     game.sound.playThrow();
     game.animations.addProjectile(this.x, this.y, player.x, player.y, '🏹');
 
@@ -652,6 +655,7 @@ export class Monster extends Entity {
   // ビホルダーの怪光線
   castBeholderRay(player, game) {
     this.triggerAttackAnim();
+    player.setHitFrom(this);
     game.sound.playMagic();
     const rayType = Math.random();
     if (rayType < 0.35) {

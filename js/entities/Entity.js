@@ -1,7 +1,12 @@
 /**
  * キャラクター・モンスターの共通基底エンティティ
  */
-import { CONFIG } from '../config.js?v=20260924_10';
+import { CONFIG } from '../config.js?v=20260924_11';
+import { fxClock } from '../engine/FxClock.js?v=20260924_11';
+
+// 攻撃の踏み込み・被弾ののけぞりモーションの長さ (ms)
+export const ATTACK_ANIM_MS = 160;
+export const DAMAGE_ANIM_MS = 220;
 
 export class Entity {
   constructor(x, y, name) {
@@ -21,6 +26,10 @@ export class Entity {
     // 攻撃・被弾アニメーションタイマー
     this.attackAnimTimer = 0;
     this.damageAnimTimer = 0;
+    // 攻撃した回数（そのターンに攻撃したかの判定に使う）
+    this.attackSeq = 0;
+    // 最後に攻撃してきた相手のいる向き
+    this.hitFromDir = null;
 
     // 状態異常 (ターン数でデクリメント)
     this.statusEffects = {
@@ -65,12 +74,20 @@ export class Entity {
     if (this.damageAnimTimer > 0) this.damageAnimTimer -= deltaMs;
   }
 
+  // 演出の順番待ち中なら、自分の番が来てから動く
   triggerAttackAnim() {
-    this.attackAnimTimer = 160;
+    this.attackSeq++;
+    fxClock.run(() => { this.attackAnimTimer = ATTACK_ANIM_MS; });
+  }
+
+  // 攻撃してきた相手の向きを覚える（のけぞる方向に使う）
+  setHitFrom(attacker) {
+    const dir = { dx: Math.sign(attacker.x - this.x), dy: Math.sign(attacker.y - this.y) };
+    fxClock.run(() => { this.hitFromDir = dir; });
   }
 
   triggerDamageAnim() {
-    this.damageAnimTimer = 220;
+    fxClock.run(() => { this.damageAnimTimer = DAMAGE_ANIM_MS; });
   }
 
   // ターン終了時に状態異常を減衰

@@ -1,7 +1,7 @@
 /**
  * クラシック『ローグ』×『シレン』風 3x3 グリッド分割プロシージャルダンジョン生成
  */
-import { CONFIG } from '../config.js?v=20260924_10';
+import { CONFIG } from '../config.js?v=20260924_11';
 
 export class DungeonGenerator {
   constructor(width, height) {

@@ -2,7 +2,15 @@
  * 3Dクォータービュー（立体パースペクティブ）レンダラー
  * 参考画像に準拠した立体石造りの壁・敷石床・ツタ・ランタン台座・モニュメント
  */
-import { CONFIG } from '../config.js?v=20260924_10';
+import { CONFIG } from '../config.js?v=20260924_11';
+import { getFlashSprite } from './Animation.js?v=20260924_11';
+import { ATTACK_ANIM_MS, DAMAGE_ANIM_MS } from '../entities/Entity.js?v=20260924_11';
+
+// 攻撃時の踏み込み距離・被弾時ののけぞり距離 (px)
+const LUNGE_DIST = 13;
+const RECOIL_DIST = 7;
+// 敵HPバーの「削れた分」が追いつく速さ（1秒あたりの割合）
+const HP_TRAIL_SPEED = 2.5;
 
 // 床・通路のすぐ南にある壁は、この高さ(px)の低い縁として描く
 // （壁の高さ WALL_H がタイル奥行き TILE_D より高いため、そのままだと奥の床・通路を覆い隠してしまう）
@@ -33,6 +41,8 @@ export class Renderer {
     // カメラ位置
     this.cameraX = 0;
     this.cameraY = 0;
+    // 次のフレームでカメラを追従させずにプレイヤーへ合わせる
+    this.snapCamera = true;
 
     // HUDに覆われる画面上下の領域（px）。プレイヤーを見えている範囲の中央に置くために使う
     this.viewInsetTop = 0;
@@ -112,6 +122,12 @@ export class Renderer {
     const viewCenterY = this.viewInsetTop + (this.height - this.viewInsetTop - this.viewInsetBottom) / 2;
     const targetCamX = pScreen.x + CONFIG.TILE_W / 2 - this.width / 2;
     const targetCamY = pScreen.y + CONFIG.TILE_D / 2 - viewCenterY;
+    if (this.snapCamera) {
+      // 階層移動・ワープ直後は滑らせずに合わせる
+      this.snapCamera = false;
+      this.cameraX = targetCamX;
+      this.cameraY = targetCamY;
+    }
     this.cameraX += (targetCamX - this.cameraX) * 0.15;
     this.cameraY += (targetCamY - this.cameraY) * 0.15;
 
@@ -119,23 +135,68 @@ export class Renderer {
     ctx.fillStyle = CONFIG.COLORS.BG_DARK;
     ctx.fillRect(0, 0, this.width, this.height);
 
+    // 画面揺れ・攻撃の反動・ズーム（画面中央を基準に拡大）
+    const fx = game.animations.getCameraFx();
+    const camX = Math.round(this.cameraX + fx.x);
+    const camY = Math.round(this.cameraY + fx.y);
+
     ctx.save();
-    ctx.translate(-Math.round(this.cameraX), -Math.round(this.cameraY));
+    if (fx.zoom !== 1) {
+      ctx.translate(this.width / 2, viewCenterY);
+      ctx.scale(fx.zoom, fx.zoom);
+      ctx.translate(-this.width / 2, -viewCenterY);
+    }
+
+    ctx.save();
+    ctx.translate(-camX, -camY);
 
     // 3Dクォータービューの深度ソート（奥から手前へ）描画
-    this.render3DWorld(game, pGridX, pGridY);
+    this.render3DWorld(game, pGridX, pGridY, deltaMs);
 
     ctx.restore();
 
     // 動的ライティング＆視界（Fog of War）
-    this.renderLightingAndFog(game, pScreen);
+    this.renderLightingAndFog(game, pScreen, camX, camY);
 
     // エフェクト＆アニメーション
-    game.animations.render(ctx, this.cameraX, this.cameraY);
+    game.animations.render(ctx, camX, camY);
+    ctx.restore();
+
+    // 画面全体の演出（フラッシュ・被弾の赤み・暗転）
+    game.animations.renderScreen(ctx, this.width, this.height, player.hp / player.maxHp);
+  }
+
+  // 攻撃の踏み込み・被弾ののけぞりによる描画位置のずれ
+  // dir: 攻撃する向き、hitFrom: 攻撃してきた相手のいる向き（どちらも dx, dy）
+  getMotionOffset(entity, dir, hitFrom = dir) {
+    let ox = 0;
+    let oy = 0;
+    if (entity.attackAnimTimer > 0 && dir) {
+      // 素早く踏み込み、ゆっくり戻る
+      const p = 1 - entity.attackAnimTimer / ATTACK_ANIM_MS;
+      const k = p < 0.3 ? p / 0.3 : 1 - (p - 0.3) / 0.7;
+      ox += dir.dx * LUNGE_DIST * k;
+      oy += dir.dy * LUNGE_DIST * 0.72 * k;
+    }
+    if (entity.damageAnimTimer > 0) {
+      const k = entity.damageAnimTimer / DAMAGE_ANIM_MS;
+      if (hitFrom) {
+        ox -= hitFrom.dx * RECOIL_DIST * k;
+        oy -= hitFrom.dy * RECOIL_DIST * 0.72 * k;
+      }
+      // 小刻みな震え
+      ox += Math.sin(entity.damageAnimTimer * 0.9) * 3 * k;
+    }
+    return { ox, oy };
+  }
+
+  // a から b への向き（dx, dy ∈ {-1, 0, 1}）
+  dirBetween(a, b) {
+    return { dx: Math.sign(b.x - a.x), dy: Math.sign(b.y - a.y) };
   }
 
   // 奥（gy小）から手前（gy大）へのZソート立体レンダリング
-  render3DWorld(game, pGridX, pGridY) {
+  render3DWorld(game, pGridX, pGridY, deltaMs = 16) {
     const ctx = this.ctx;
     const map = game.map;
     const tw = CONFIG.TILE_W;
@@ -202,14 +263,16 @@ export class Renderer {
           const mGridX = m.renderX / CONFIG.TILE_SIZE;
           const mGridY = m.renderY / CONFIG.TILE_SIZE;
           const { x: mx, y: my } = this.gridToScreen(mGridX, mGridY);
-          this.draw3DMonster(ctx, mx, my, tw, td, m);
+          const { ox, oy } = this.getMotionOffset(m, this.dirBetween(m, game.player));
+          this.draw3DMonster(ctx, mx + ox, my + oy, tw, td, m, deltaMs);
         }
       }
 
       // 2-E. プレイヤーがこの行にいれば描画
       if (Math.round(pGridY) === gy) {
         const pScreen = this.gridToScreen(pGridX, pGridY);
-        this.draw3DPlayer(ctx, pScreen.x, pScreen.y, tw, td, game.player);
+        const { ox, oy } = this.getMotionOffset(game.player, game.player.facing, game.player.hitFromDir);
+        this.draw3DPlayer(ctx, pScreen.x + ox, pScreen.y + oy, tw, td, game.player);
       }
 
       // 2-F. 部屋の角に立つ「立体石柱＆ランタン台座」および中央モニュメント
@@ -767,18 +830,13 @@ export class Renderer {
   }
 
   // 3Dモンスター描画（参考画像のようなファンタジー生物・スライム・死神等）
-  draw3DMonster(ctx, mx, my, tw, td, m) {
+  draw3DMonster(ctx, mx, my, tw, td, m, deltaMs = 16) {
     const cx = mx + tw / 2;
     const cy = my + td / 2;
+    // 被弾直後の経過割合（1 → 0）
+    const hitK = m.damageAnimTimer > 0 ? m.damageAnimTimer / DAMAGE_ANIM_MS : 0;
 
     ctx.save();
-    // 被弾フラッシュ
-    if (m.damageAnimTimer > 0) {
-      ctx.fillStyle = 'rgba(239, 68, 68, 0.6)';
-      ctx.beginPath();
-      ctx.arc(cx, cy - 8, 18, 0, Math.PI * 2);
-      ctx.fill();
-    }
 
     // 床のドロップシャドウ
     ctx.beginPath();
@@ -786,15 +844,30 @@ export class Renderer {
     ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
     ctx.fill();
 
-    // モンスター本体
+    // モンスター本体（被弾するとつぶれて横に広がる）
+    const squash = hitK * 0.25;
+    ctx.save();
+    ctx.translate(cx, cy + 2);
+    ctx.scale(1 + squash, 1 - squash);
     ctx.font = '26px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.shadowColor = m.color;
     ctx.shadowBlur = 10;
-    ctx.fillText(m.icon, cx, cy - 10);
+    ctx.fillText(m.icon, 0, -12);
+
+    // 被弾の瞬間は白く光る
+    if (hitK > 0.55) {
+      const sprite = getFlashSprite(m.icon, 26);
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = Math.min(1, (hitK - 0.55) / 0.3);
+      ctx.drawImage(sprite, -sprite.width / 2, -12 - sprite.height / 2);
+    }
+    ctx.restore();
 
     // 状態異常アイコン
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
     if (m.statusEffects.sleep > 0) {
       ctx.font = '12px sans-serif';
       ctx.fillText('💤', cx + 12, cy - 26);
@@ -816,6 +889,13 @@ export class Renderer {
       ctx.fillStyle = '#0f172a';
       ctx.fillRect(barX, barY, barW, barH);
       const hpRatio = Math.max(0, m.hp / m.maxHp);
+      // 削られた分を白く残し、少し遅れて縮める
+      if (m.hpTrail === undefined || m.hpTrail < hpRatio) m.hpTrail = hpRatio;
+      if (m.damageAnimTimer <= 0) {
+        m.hpTrail = Math.max(hpRatio, m.hpTrail - HP_TRAIL_SPEED * deltaMs / 1000);
+      }
+      ctx.fillStyle = '#f8fafc';
+      ctx.fillRect(barX, barY, barW * m.hpTrail, barH);
       ctx.fillStyle = hpRatio > 0.4 ? '#10b981' : '#ef4444';
       ctx.fillRect(barX, barY, barW * hpRatio, barH);
     }
@@ -890,7 +970,8 @@ export class Renderer {
     }
 
     // 6. 冒険者キャラクター（参考画像の愛らしいマント付き金髪勇者）
-    this.drawHeroAdventurer(ctx, cx, cy, dir, player.damageAnimTimer > 0);
+    const attackP = player.attackAnimTimer > 0 ? 1 - player.attackAnimTimer / ATTACK_ANIM_MS : -1;
+    this.drawHeroAdventurer(ctx, cx, cy, dir, player.damageAnimTimer > 0, attackP);
 
     // 7. 状態異常
     if (player.statusEffects.sleep > 0) {
@@ -902,7 +983,8 @@ export class Renderer {
   }
 
   // 参考画像完全準拠の冒険者（マント・革鎧・髪型・剣）
-  drawHeroAdventurer(ctx, cx, cy, dir, isDamage) {
+  // attackP: 攻撃モーションの進行度 0〜1（攻撃していなければ負の値）
+  drawHeroAdventurer(ctx, cx, cy, dir, isDamage, attackP = -1) {
     ctx.save();
     
     // 微細な息遣い・歩行の揺れ
@@ -965,7 +1047,14 @@ export class Renderer {
     // 6. 剣 (Adventurer Sword)
     ctx.save();
     ctx.translate(cx + 7, baseY - 10);
-    ctx.rotate(Math.PI / 4);
+    // 攻撃時は剣を振りかぶってから一気に振り下ろす
+    let swing = 0;
+    if (attackP >= 0) {
+      swing = attackP < 0.25 ? -1.2 * (attackP / 0.25) : -1.2 + 3.0 * Math.min(1, (attackP - 0.25) / 0.2);
+      swing *= 1 - Math.max(0, (attackP - 0.6) / 0.4);
+    }
+    ctx.rotate(Math.PI / 4 + swing);
+    if (attackP >= 0) ctx.scale(1.4, 1.4);
     // 刃
     ctx.fillStyle = '#e2e8f0';
     ctx.fillRect(0, -6, 2, 8);
@@ -981,13 +1070,13 @@ export class Renderer {
   }
 
   // 動的ライティング＆視界（Fog of War）
-  renderLightingAndFog(game, pScreen) {
+  renderLightingAndFog(game, pScreen, camX = this.cameraX, camY = this.cameraY) {
     const ctx = this.ctx;
     const tw = CONFIG.TILE_W;
     const td = CONFIG.TILE_D;
 
-    const screenPlayerX = Math.round(pScreen.x + tw / 2 - this.cameraX);
-    const screenPlayerY = Math.round(pScreen.y + td / 2 - this.cameraY);
+    const screenPlayerX = Math.round(pScreen.x + tw / 2 - camX);
+    const screenPlayerY = Math.round(pScreen.y + td / 2 - camY);
 
     const pulse = Math.sin(this.torchTimer * 6) * 4;
     const lightRadius = 220 + pulse;
