@@ -1,22 +1,23 @@
 /**
  * ゲームステート・ターン管理・統合ゲームエンジン
  */
-import { CONFIG } from '../config.js?v=20260924_10';
-import { sound } from './Audio.js?v=20260924_10';
-import { InputManager } from './Input.js?v=20260924_10';
-import { Renderer } from './Renderer.js?v=20260924_10';
-import { AnimationEngine } from './Animation.js?v=20260924_10';
-import { DungeonGenerator } from '../dungeon/DungeonGen.js?v=20260924_10';
-import { DungeonMap } from '../dungeon/Map.js?v=20260924_10';
-import { Player } from '../entities/Player.js?v=20260924_10';
-import { Monster } from '../entities/Monster.js?v=20260924_10';
-import { Item, ITEM_TYPES } from '../items/Item.js?v=20260924_10';
-import { Inventory } from '../items/Inventory.js?v=20260924_10';
-import { ItemEffectHandler } from '../items/ItemEffects.js?v=20260924_10';
-import { HUD } from '../ui/HUD.js?v=20260924_10';
-import { InventoryUI } from '../ui/InventoryUI.js?v=20260924_10';
-import { OverlayMap } from '../ui/OverlayMap.js?v=20260924_10';
-import { VirtualPad } from '../ui/VirtualPad.js?v=20260924_10';
+import { CONFIG } from '../config.js?v=20260925_01';
+import { sound } from './Audio.js?v=20260925_01';
+import { InputManager } from './Input.js?v=20260925_01';
+import { AnimationEngine } from './Animation.js?v=20260925_01';
+import { fxClock } from './FxClock.js?v=20260925_01';
+import { DungeonGenerator } from '../dungeon/DungeonGen.js?v=20260925_01';
+import { DungeonMap } from '../dungeon/Map.js?v=20260925_01';
+import { Player } from '../entities/Player.js?v=20260925_01';
+import { Monster } from '../entities/Monster.js?v=20260925_01';
+import { Item, ITEM_TYPES } from '../items/Item.js?v=20260925_01';
+import { Inventory } from '../items/Inventory.js?v=20260925_01';
+import { ItemEffectHandler } from '../items/ItemEffects.js?v=20260925_01';
+import { HUD } from '../ui/HUD.js?v=20260925_01';
+import { InventoryUI } from '../ui/InventoryUI.js?v=20260925_01';
+import { OverlayMap } from '../ui/OverlayMap.js?v=20260925_01';
+import { VirtualPad } from '../ui/VirtualPad.js?v=20260925_01';
+import { MONSTER_GLYPHS } from '../gfx/glyphs.js?v=20260925_01';
 
 // アイテムが既存アイテムと重ならないよう転がる最大距離（マス）
 const ITEM_SCATTER_RADIUS = 3;
@@ -24,6 +25,19 @@ const ITEM_SCATTER_RADIUS = 3;
 const BLOCKING_PANEL_IDS = ['help-modal', 'log-history-modal'];
 // ランダムな空きマス探索の試行回数
 const FREE_TILE_ATTEMPTS = 200;
+
+// --- 手応えの演出 ---
+// 自分の攻撃の後、敵の反撃を見せ始めるまでの間 (ms)
+const PLAYER_TO_ENEMY_DELAY = 200;
+// 複数の敵が攻撃してくる時、1体ずつずらして見せる間隔 (ms)
+const ENEMY_STAGGER = 170;
+// ヒットストップ（命中の瞬間に止める時間 ms）
+const HIT_STOP_MS = 55;
+const CRIT_HIT_STOP_MS = 120;
+const KILL_HIT_STOP_MS = 90;
+const DAMAGED_HIT_STOP_MS = 45;
+// 倒れてからゲームオーバー画面を出すまでの間 (ms)
+const GAME_OVER_MODAL_DELAY = 1100;
 
 export const GAME_STATES = {
   TITLE: 'title',
@@ -71,14 +85,16 @@ export class Game {
     this.lastFrameTime = performance.now();
   }
 
-  init(canvas) {
-    this.renderer = new Renderer(canvas);
+  // renderer: 初期化済みの Renderer3D
+  init(renderer) {
+    this.renderer = renderer;
     this.hud = new HUD();
     this.inventoryUI = new InventoryUI(this);
     this.virtualPad = new VirtualPad(this.input);
 
     // プレイヤー生成
     this.player = new Player(0, 0);
+    this.attachPlayerHooks();
 
     // 初期の持参アイテム（初心者救済用の携帯食糧、ヒールポーション、ショートソード等）
     const initialItems = [
@@ -126,9 +142,41 @@ export class Game {
     }
   }
 
+  // プレイヤーがダメージを受けた時の画面の揺れ・赤み・振動
+  attachPlayerHooks() {
+    this.player.onDamaged = (amount) => {
+      const ratio = Math.min(1, amount / Math.max(1, this.player.maxHp));
+      this.animations.shake(0.3 + ratio * 1.2);
+      this.animations.hurt(0.45 + ratio * 1.5);
+      this.animations.vibrate(amount >= this.player.maxHp * 0.2 ? 60 : 30);
+      this.animations.aberration(0.5 + ratio * 2);
+      if (ratio >= 0.2) {
+        // 大きな一撃：画面を寄せて一瞬スローに
+        this.animations.zoomPunch(0.1);
+        this.animations.slowMo(0.35, 180);
+      }
+      this.hitStop(DAMAGED_HIT_STOP_MS);
+      fxClock.run(() => this.hud.onPlayerHit(amount));
+    };
+  }
+
+  // 杖・矢・投擲などが敵に当たった瞬間の手応え（火花・揺れ・ヒットストップ）
+  impactFx(monster, dir, isBig = false) {
+    this.animations.addHitSpark(monster.x, monster.y, dir, isBig);
+    this.animations.shake(isBig ? 0.45 : 0.22);
+    this.hitStop(isBig ? CRIT_HIT_STOP_MS : HIT_STOP_MS);
+  }
+
+  // ヒットストップ（演出の順番待ち中ならその順番で止める）
+  hitStop(ms) {
+    fxClock.run(() => fxClock.hitStop(ms));
+  }
+
   // フロア生成
   generateFloor(floorNumber) {
     this.currentFloor = floorNumber;
+    // 地形を作り直すための通し番号（生成器はタイル配列を使い回すため）
+    this.floorSerial = (this.floorSerial || 0) + 1;
     const genData = this.generator.generate(floorNumber);
     this.map.init(genData);
 
@@ -140,6 +188,7 @@ export class Game {
     this.player.renderY = this.player.y * CONFIG.TILE_SIZE;
     this.player.targetRenderX = this.player.renderX;
     this.player.targetRenderY = this.player.renderY;
+    if (this.renderer) this.renderer.snapCamera = true;
 
     // 視界更新
     this.updateVisibility();
@@ -187,9 +236,6 @@ export class Game {
 
     // トラップ生成（フロアに3〜6個配置）
     this.map.spawnTraps(Math.floor(Math.random() * 4) + 3);
-
-    // BGM開始
-    this.sound.startBGM();
   }
 
   // 視界更新
@@ -200,7 +246,10 @@ export class Game {
     const room = this.map.getRoomAt(this.player.x, this.player.y);
     if (room && room.isMonsterHouse && !room.alerted) {
       room.alerted = true;
-      this.sound.playTrap();
+      this.sound.playAlarm();
+      this.animations.flash('#ff2020', 0.35, 500);
+      this.animations.shake(0.5);
+      this.animations.aberration(1.2);
       this.addLog('⚡ 警報！ モンスターハウスに迷い込んでしまった！ ⚡', 'danger');
     }
   }
@@ -210,21 +259,30 @@ export class Game {
     const deltaMs = Math.min(now - this.lastFrameTime, 100);
     this.lastFrameTime = now;
 
+    // スローモーション中はゲーム内の時間をゆっくり進める
+    const gameDelta = deltaMs * this.animations.getTimeScale();
+
+    // 0. 演出の順番待ち・ヒットストップの進行
+    fxClock.update(gameDelta);
+    this.updatePendingModal(deltaMs);
+
     // 1. 入力処理
     this.input.update(deltaMs);
     this.handleInput();
 
-    // 2. エンティティのスムーズ描画座標補間
-    this.player.updateRenderPos(deltaMs);
-    for (const m of this.monsters) {
-      m.updateRenderPos(deltaMs);
+    // 2. エンティティのスムーズ描画座標補間（ヒットストップ中は止める）
+    if (!fxClock.isFrozen()) {
+      this.player.updateRenderPos(gameDelta);
+      for (const m of this.monsters) {
+        m.updateRenderPos(gameDelta);
+      }
     }
 
     // 3. アニメーションエンジン更新
-    this.animations.update(deltaMs);
+    this.animations.update(deltaMs, gameDelta);
 
-    // 4. メインCanvas描画
-    this.renderer.render(this, deltaMs);
+    // 4. 3D 描画
+    this.renderer.render(this, deltaMs, gameDelta);
 
     // 5. オーバーレイマップ描画
     this.overlayMap.render(this.renderer, this);
@@ -237,6 +295,15 @@ export class Game {
 
   // 入力コマンドの消化
   handleInput() {
+    // 攻撃・反撃の演出中や階層移動の暗転中は次の行動を待たせる（押しっぱなしの入力は最新の1つだけ残す）
+    const isBusy = this.state === GAME_STATES.PLAYING && !this.inventoryUI.isOpen &&
+      (fxClock.isBusy() || this.animations.isTransitioning());
+    if (isBusy) {
+      const queue = this.input.actionQueue;
+      if (queue.length > 1) queue.splice(0, queue.length - 1);
+      return;
+    }
+
     const action = this.input.popAction();
     if (!action) return;
 
@@ -264,8 +331,9 @@ export class Game {
       return;
     }
 
-    // ゲームオーバーまたはクリア時はリトライのみ
+    // ゲームオーバーまたはクリア時はリトライのみ（結果画面が出るまでは受け付けない）
     if (this.state !== GAME_STATES.PLAYING) {
+      if (this.pendingModal) return;
       if (action.type === 'ATTACK' || action.type === 'TOGGLE_INVENTORY') {
         this.restartGame();
       }
@@ -341,11 +409,16 @@ export class Game {
 
     // 2. 移動可能性＆角抜けチェック
     if (targetMonster || !this.map.isWalkable(nx, ny) || !this.map.canMoveDiagonal(this.player.x, this.player.y, nx, ny)) {
-      this.sound.playStep(); // 壁にコツン
+      // 壁にゴツン（ダッシュの停止時は鳴らさない）
+      if (!this.isDashing) {
+        this.sound.playBump();
+        this.animations.kick(dir, 3);
+      }
       return false;
     }
 
     // 3. 移動実行
+    this.animations.addDust(this.player.x, this.player.y, this.isDashing ? 4 : 2);
     this.player.moveTo(nx, ny);
     this.sound.playStep();
     this.updateVisibility();
@@ -396,6 +469,7 @@ export class Game {
       this.player.triggerAttackAnim();
       this.sound.playSwing();
       this.animations.addSlash(targetX, targetY, dir);
+      this.animations.kick(dir, 2);
 
       // 正面の罠を発見（素振りによる罠チェック）
       const trap = this.map.revealTrap(targetX, targetY);
@@ -417,13 +491,13 @@ export class Game {
     // 命中判定（90%）
     if (Math.random() < 0.1) {
       this.sound.playSwing();
-      this.animations.addDamageNumber(monster.x, monster.y, 'MISS', '#94a3b8');
+      this.animations.kick(dir, 2);
+      this.animations.addFloatingText(monster.x, monster.y, 'MISS', '#94a3b8');
       this.addLog(`攻撃を繰り出したが、${monster.name}にかわされた！`, 'normal');
       return;
     }
 
     // ダメージ計算（SFC風計算式）
-    this.sound.playHit();
     const playerAtk = this.player.getTotalAtk(this.inventory);
     const rawDmg = Math.max(1, playerAtk - Math.floor(monster.def * 0.7));
     const isCrit = Math.random() < 0.12; // 会心の一撃
@@ -432,6 +506,21 @@ export class Game {
 
     monster.takeDamage(dmg);
     this.animations.addDamageNumber(monster.x, monster.y, dmg, isCrit ? '#facc15' : '#ffffff', isCrit);
+
+    // 手応え：打撃音・火花・ヒットストップ・カメラの反動と寄り
+    this.sound.playHit(isCrit);
+    this.animations.addHitSpark(monster.x, monster.y, dir, isCrit);
+    this.animations.kick(dir, isCrit ? 9 : 5);
+    this.animations.shake(isCrit ? 0.55 : 0.22);
+    this.animations.focus(monster.x, monster.y, isCrit ? 0.3 : 0.12);
+    if (isCrit) {
+      this.animations.zoomPunch(0.12);
+      this.animations.flash('#fef9c3', 0.45, 200);
+      this.animations.aberration(1.4);
+      this.animations.slowMo(0.25, 260);
+      this.animations.vibrate(35);
+    }
+    this.hitStop(isCrit ? CRIT_HIT_STOP_MS : HIT_STOP_MS);
 
     if (isCrit) {
       this.addLog(`会心の一撃！！ ${monster.name}に ${dmg} の大ダメージ！`, 'accent');
@@ -447,6 +536,13 @@ export class Game {
   // モンスター撃破
   handleMonsterDefeat(monster) {
     this.sound.playEnemyDefeat();
+    this.animations.addDeath(monster.x, monster.y, MONSTER_GLYPHS[monster.defId] || '?', monster.color);
+    this.animations.slowMo(0.35, 200);
+    this.animations.focus(monster.x, monster.y, 0.2);
+    this.animations.addFloatingText(monster.x, monster.y - 0.5, `+${monster.exp} EXP`, '#4ade80', 0.8);
+    this.animations.shake(0.3);
+    this.animations.vibrate(25);
+    this.hitStop(KILL_HIT_STOP_MS);
     this.addLog(`${monster.name}を倒した！ （+${monster.exp} EXP）`, 'heal');
     this.player.gainExp(monster.exp, this);
 
@@ -540,7 +636,8 @@ export class Game {
     if (item.type === ITEM_TYPES.GOLD) {
       this.player.gold += item.power || 50;
       this.droppedItems.splice(itemIdx, 1);
-      this.sound.playPickup();
+      this.sound.playCoin();
+      this.animations.addPickup(item.x, item.y, item.icon, `+${item.power || 50} G`, '#facc15');
       this.addLog(`${item.power || 50} ゴールドを拾った！`, 'accent');
       return;
     }
@@ -550,6 +647,7 @@ export class Game {
     if (res.success) {
       this.droppedItems.splice(itemIdx, 1);
       this.sound.playPickup();
+      this.animations.addPickup(item.x, item.y, item.icon, null, item.color || '#facc15');
       this.addLog(`【${item.getDisplayName()}】を拾って持ち物にしまった。`, 'heal');
     } else {
       this.addLog(`足元に【${item.getDisplayName()}】がある。（持ち物がいっぱい）`, 'warning');
@@ -576,9 +674,12 @@ export class Game {
       return;
     }
 
+    // 暗転している間に次の階層を作り、明けたら階層名を出す
     const nextFloor = this.currentFloor + 1;
-    this.addLog(`階段を降りて、地下 ${nextFloor} 階へ進んだ...`, 'level-up');
-    this.generateFloor(nextFloor);
+    this.animations.startFloorTransition(`地下 ${nextFloor} 階`, () => {
+      this.addLog(`階段を降りて、地下 ${nextFloor} 階へ進んだ...`, 'level-up');
+      this.generateFloor(nextFloor);
+    });
   }
 
   // ダッシュ機能（シレンのBダッシュ：通路の角や敵に当たるまで一気に直進）
@@ -683,33 +784,63 @@ export class Game {
     }
 
     // モンスターのターン（行動中に倒れた・召喚されたモンスターがいても安全なようにコピーを回す）
-    for (const m of [...this.monsters]) {
-      if (m.isDead() || !this.monsters.includes(m)) continue;
-      m.takeAction(this);
-
-      // 倍速モンスター（死神など）の2回行動
-      if (m.speed >= 2 && !this.player.isDead()) {
+    // 自分の攻撃を見せ終えてから敵の攻撃を1体ずつ順に見せる（ロジックはここで確定し、演出だけ遅らせる）
+    const playerFxActive = this.player.attackAnimTimer > 0 ||
+      this.animations.projectiles.some(p => !p.isPickup) || this.animations.beams.length > 0;
+    let fxOffset = playerFxActive ? PLAYER_TO_ENEMY_DELAY : 0;
+    try {
+      for (const m of [...this.monsters]) {
+        if (m.isDead() || !this.monsters.includes(m)) continue;
+        fxClock.delayMs = fxOffset;
+        let seq = m.attackSeq;
         m.takeAction(this);
-      }
 
-      m.updateStatusEffects();
+        // 倍速モンスター（死神など）の2回行動
+        if (m.speed >= 2 && !this.player.isDead()) {
+          if (m.attackSeq !== seq) {
+            fxOffset += ENEMY_STAGGER;
+            fxClock.delayMs = fxOffset;
+            seq = m.attackSeq;
+          }
+          m.takeAction(this);
+        }
+        if (m.attackSeq !== seq) fxOffset += ENEMY_STAGGER;
 
-      // プレイヤーが敵の行動で死亡したかチェック
-      if (this.player.isDead()) {
-        this.gameOver(`${m.name}に倒されてしまった...`);
-        return;
+        m.updateStatusEffects();
+
+        // プレイヤーが敵の行動で死亡したかチェック
+        if (this.player.isDead()) {
+          this.gameOver(`${m.name}に倒されてしまった...`);
+          return;
+        }
       }
+    } finally {
+      fxClock.delayMs = 0;
     }
+  }
+
+  // 演出が終わるのを待ってから結果画面を出す
+  updatePendingModal(deltaMs) {
+    const pm = this.pendingModal;
+    if (!pm || fxClock.isBusy()) return;
+    pm.wait -= deltaMs;
+    if (pm.wait > 0) return;
+    this.pendingModal = null;
+    const modal = document.getElementById(pm.id);
+    if (modal) modal.classList.remove('hidden');
   }
 
   // ゲームオーバー
   gameOver(cause) {
     this.state = GAME_STATES.GAME_OVER;
     this.stopDash();
-    this.sound.stopBGM();
     this.sound.playGameOver();
+    this.animations.flash('#7f1d1d', 0.55, 900);
+    this.animations.shake(0.9);
+    this.animations.aberration(2);
+    this.animations.slowMo(0.3, 900);
+    this.animations.vibrate(200);
 
-    const modal = document.getElementById('game-over-modal');
     const causeEl = document.getElementById('game-over-cause');
     const scoreEl = document.getElementById('game-over-score');
 
@@ -718,14 +849,14 @@ export class Game {
       const score = (this.currentFloor * 1000) + (this.player.lv * 200) + this.player.gold;
       scoreEl.textContent = `到達: 地下${this.currentFloor}階 | レベル: ${this.player.lv} | スコア: ${score} pts`;
     }
-    if (modal) modal.classList.remove('hidden');
+    // 倒れる瞬間を見せてから結果画面を出す
+    this.pendingModal = { id: 'game-over-modal', wait: GAME_OVER_MODAL_DELAY };
   }
 
   // ゲームクリア
   gameClear() {
     this.state = GAME_STATES.GAME_CLEAR;
     this.stopDash();
-    this.sound.stopBGM();
     this.sound.playLevelUp();
 
     const modal = document.getElementById('game-clear-modal');
@@ -749,6 +880,12 @@ export class Game {
     this.state = GAME_STATES.PLAYING;
     this.inventory = new Inventory(20);
     this.player = new Player(0, 0);
+    this.attachPlayerHooks();
+
+    // 前の冒険の演出を片付ける
+    fxClock.reset();
+    this.animations = new AnimationEngine();
+    this.pendingModal = null;
 
     const initialItems = [
       Item.createFromDef('wpn_short_sword'),
@@ -775,9 +912,10 @@ export class Game {
     return this.droppedItems.find(i => i.x === this.player.x && i.y === this.player.y) || null;
   }
 
+  // 演出の順番待ち中なら、その出来事が画面に出るタイミングでログに出す
   addLog(msg, type = 'normal') {
     if (this.hud) {
-      this.hud.addLog(msg, type);
+      fxClock.run(() => this.hud.addLog(msg, type));
     }
   }
 }

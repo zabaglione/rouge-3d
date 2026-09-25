@@ -4,21 +4,22 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>ROUGE - 迷宮の秘宝 | ネオ・レトロ本格ローグライクWebゲーム</title>
-  <meta name="description" content="名作レトロゲーム『ローグ』をベースに、洗練された8方向ターン制操作性と3Dクォータービューのモダンビジュアルを融合した本格ローグライクRPG。十字キー・ジョイスティック・ゲームパッド・スマホ対応。">
+  <meta name="description" content="名作レトロゲーム『ローグ』をベースに、洗練された8方向ターン制操作性と WebGPU による 3D ビジュアルを融合した本格ローグライクRPG。敵は NetHack の記号が立体化して襲いかかる。十字キー・ジョイスティック・ゲームパッド・スマホ対応。">
   
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 
-  <link rel="stylesheet" href="css/main.css?v=20260924_10">
-  <link rel="stylesheet" href="css/hud.css?v=20260924_10">
-  <link rel="stylesheet" href="css/inventory.css?v=20260924_10">
-  <link rel="stylesheet" href="css/controls.css?v=20260924_10">
+  <link rel="stylesheet" href="css/main.css?v=20260925_01">
+  <link rel="stylesheet" href="css/hud.css?v=20260925_01">
+  <link rel="stylesheet" href="css/inventory.css?v=20260925_01">
+  <link rel="stylesheet" href="css/controls.css?v=20260925_01">
 </head>
 <body>
   <div id="app-container">
     <!-- ゲーム画面 Canvas -->
     <main id="canvas-wrapper">
       <canvas id="game-canvas"></canvas>
+      <canvas id="fx-canvas"></canvas>
     </main>
 
     <!-- 画面上部ステータスHUD -->
@@ -34,6 +35,7 @@
               <span class="gauge-value" id="hud-hp-text">30 / 30</span>
             </div>
             <div class="gauge-track">
+              <div class="gauge-trail" id="hud-hp-trail" style="width: 100%;"></div>
               <div class="gauge-fill gauge-hp" id="hud-hp-bar" style="width: 100%;"></div>
             </div>
           </div>
@@ -293,6 +295,6 @@
     </div>
   </div>
 
-  <script type="module" src="js/main.js?v=20260924_10"></script>
+  <script type="module" src="js/main.js?v=20260925_01"></script>
 </body>
 </html>

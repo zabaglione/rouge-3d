@@ -1,8 +1,8 @@
 /**
  * プレイヤーキャラクターのステータス・行動・成長システム
  */
-import { Entity } from './Entity.js?v=20260924_10';
-import { CONFIG } from '../config.js?v=20260924_10';
+import { Entity } from './Entity.js?v=20260925_01';
+import { CONFIG } from '../config.js?v=20260925_01';
 
 export class Player extends Entity {
   constructor(x, y) {
@@ -23,6 +23,9 @@ export class Player extends Entity {
     this.exp = CONFIG.PLAYER_INIT.EXP;
     this.gold = CONFIG.PLAYER_INIT.GOLD;
 
+    // ダメージを受けた時の演出（Game が設定する）
+    this.onDamaged = null;
+
     // ターンカウント・自然回復用
     this.turnCounter = 0;
     this.healStep = 0;
@@ -42,6 +45,7 @@ export class Player extends Entity {
   takeDamage(amount) {
     this.hp = Math.max(0, this.hp - amount);
     this.triggerDamageAnim();
+    if (this.onDamaged && amount > 0) this.onDamaged(amount);
     return this.hp <= 0;
   }
 

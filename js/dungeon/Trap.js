@@ -39,7 +39,7 @@ export const TRAP_TYPES = {
       player.takeDamage(dmg);
       game.animations.addExplosion(player.x, player.y);
       game.addLog(`地雷が爆発した！ HPが半分（-${dmg}）になった！`, 'danger');
-      game.sound.playHit();
+      game.sound.playExplosion();
       // 周囲の敵にも大ダメージ（倒れた敵は撃破処理して盤面から除く）
       for (const m of [...game.monsters]) {
         const dist = Math.max(Math.abs(m.x - player.x), Math.abs(m.y - player.y));
@@ -64,6 +64,7 @@ export const TRAP_TYPES = {
         game.updateVisibility();
         game.addLog('ワープの罠だ！ 別の場所へ飛ばされた！', 'accent');
         game.sound.playMagic();
+        game.animations.flash('#38bdf8', 0.45, 320);
       }
     }
   },

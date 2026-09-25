@@ -1,12 +1,18 @@
 /**
  * 画面上部ステータスHUD ＆ 画面下部メッセージログ管理
  */
+import { fxClock } from '../engine/FxClock.js?v=20260925_01';
+
 export class HUD {
   constructor() {
     // 上部ステータスDOM
     this.floorEl = document.getElementById('hud-floor');
     this.hpTextEl = document.getElementById('hud-hp-text');
     this.hpBarEl = document.getElementById('hud-hp-bar');
+    this.hpTrailEl = document.getElementById('hud-hp-trail');
+    this.hpGroupEl = this.hpBarEl ? this.hpBarEl.closest('.gauge-group') : null;
+    // 画面に出しているHP（敵の攻撃の演出が出るまで減らさない）
+    this.shownHp = null;
     this.hungerTextEl = document.getElementById('hud-hunger-text');
     this.hungerBarEl = document.getElementById('hud-hunger-bar');
     this.lvEl = document.getElementById('hud-lv');
@@ -34,11 +40,16 @@ export class HUD {
     // 階層
     if (this.floorEl) this.floorEl.textContent = `地下 ${game.currentFloor} 階`;
 
-    // HP
+    // HP（攻撃の演出を順番に再生している間は、当たった瞬間に合わせて減らす）
+    if (this.shownHp === null || !fxClock.isBusy()) {
+      this.shownHp = player.hp;
+    }
     if (this.hpTextEl && this.hpBarEl) {
-      this.hpTextEl.textContent = `${player.hp} / ${player.maxHp}`;
-      const hpPct = Math.max(0, Math.min(100, (player.hp / player.maxHp) * 100));
+      const hp = this.shownHp;
+      this.hpTextEl.textContent = `${hp} / ${player.maxHp}`;
+      const hpPct = Math.max(0, Math.min(100, (hp / player.maxHp) * 100));
       this.hpBarEl.style.width = `${hpPct}%`;
+      if (this.hpTrailEl) this.hpTrailEl.style.width = `${hpPct}%`;
 
       // ピンチ演出
       if (hpPct <= 25) {
@@ -83,6 +94,20 @@ export class HUD {
       }
       this.modeBadgesEl.innerHTML = badges;
     }
+  }
+
+  // 攻撃が当たった瞬間（演出のタイミング）に呼ばれ、表示中のHPを減らす
+  onPlayerHit(amount) {
+    if (this.shownHp !== null) this.shownHp = Math.max(0, this.shownHp - amount);
+    this.playHitShake();
+  }
+
+  // 被弾時にHP表示を揺らす（アニメーションを最初から再生し直す）
+  playHitShake() {
+    if (!this.hpGroupEl) return;
+    this.hpGroupEl.classList.remove('hud-hit');
+    void this.hpGroupEl.offsetWidth;
+    this.hpGroupEl.classList.add('hud-hit');
   }
 
   // ログの追加

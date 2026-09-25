@@ -1,7 +1,9 @@
 /**
  * アイテム使用・読解・振下・投擲時の効果ロジック
  */
-import { ITEM_TYPES, Item } from './Item.js?v=20260924_10';
+import { ITEM_TYPES, Item } from './Item.js?v=20260925_01';
+import { fxClock } from '../engine/FxClock.js?v=20260925_01';
+import { projectileFlightMs } from '../engine/Animation.js?v=20260925_01';
 
 // 衝撃波の杖：吹き飛ばす最大距離と激突ダメージ
 const KNOCKBACK_DISTANCE = 10;
@@ -152,6 +154,7 @@ export class ItemEffectHandler {
       } else if (item.id === 'stf_thunder') {
         // 雷撃
         this.game.sound.playHit();
+        this.game.impactFx(targetMonster, player.facing);
         targetMonster.takeDamage(25);
         this.game.animations.addDamageNumber(targetMonster.x, targetMonster.y, 25, '#facc15');
         this.game.addLog(`激しい稲妻が${targetMonster.name}を直撃！ 25のダメージ！`, 'accent');
@@ -176,9 +179,10 @@ export class ItemEffectHandler {
     const dir = player.facing;
     this.game.addLog(`${item.name}を${dir.label}方向に射撃した！`, 'normal');
 
-    this.shootProjectile(player.x, player.y, dir, item.icon, (monster, hitX, hitY) => {
+    this.shootProjectile(player.x, player.y, dir, item, (monster, hitX, hitY) => {
       if (monster) {
         this.game.sound.playHit();
+        this.game.impactFx(monster, dir);
         const dmg = item.power + Math.floor(player.atk * 0.5);
         monster.takeDamage(dmg);
         this.game.animations.addDamageNumber(monster.x, monster.y, dmg, '#ffffff');
@@ -207,9 +211,10 @@ export class ItemEffectHandler {
     const dir = player.facing;
     this.game.addLog(`${item.name}を${dir.label}方向に投げた！`, 'normal');
 
-    this.shootProjectile(player.x, player.y, dir, item.icon, (monster, hitX, hitY) => {
+    this.shootProjectile(player.x, player.y, dir, item, (monster, hitX, hitY) => {
       if (monster) {
         this.game.sound.playHit();
+        this.game.impactFx(monster, dir);
         // アイテム種別ごとの命中効果
         if (item.type === ITEM_TYPES.HERB) {
           if (item.id === 'herb_high_heal') {
@@ -277,7 +282,8 @@ export class ItemEffectHandler {
   }
 
   // 投擲物・矢の軌道アニメーションと衝突判定
-  shootProjectile(startX, startY, dir, icon, callback) {
+  shootProjectile(startX, startY, dir, item, callback) {
+    const icon = item.icon;
     let cx = startX;
     let cy = startY;
     const maxRange = 10;
@@ -290,7 +296,7 @@ export class ItemEffectHandler {
 
       // 壁に激突
       if (!this.game.map.isWalkable(nextX, nextY)) {
-        this.game.animations.addProjectile(startX, startY, lastValidX, lastValidY, icon);
+        this.game.animations.addProjectile(startX, startY, lastValidX, lastValidY, icon, item);
         callback(null, lastValidX, lastValidY);
         return;
       }
@@ -298,8 +304,14 @@ export class ItemEffectHandler {
       // モンスターに命中
       const m = this.game.getMonsterAt(nextX, nextY);
       if (m) {
-        this.game.animations.addProjectile(startX, startY, nextX, nextY, icon);
-        callback(m, nextX, nextY);
+        this.game.animations.addProjectile(startX, startY, nextX, nextY, icon, item);
+        // 命中の演出は、飛んでいった物が届いた瞬間に合わせる
+        fxClock.delayMs = projectileFlightMs(startX, startY, nextX, nextY);
+        try {
+          callback(m, nextX, nextY);
+        } finally {
+          fxClock.delayMs = 0;
+        }
         return;
       }
 
@@ -309,7 +321,7 @@ export class ItemEffectHandler {
       lastValidY = cy;
     }
 
-    this.game.animations.addProjectile(startX, startY, lastValidX, lastValidY, icon);
+    this.game.animations.addProjectile(startX, startY, lastValidX, lastValidY, icon, item);
     callback(null, lastValidX, lastValidY);
   }
 
@@ -339,6 +351,7 @@ export class ItemEffectHandler {
 
     monster.moveTo(curX, curY);
     this.game.sound.playHit();
+    this.game.impactFx(monster, dir, true);
     if (monster.isDead()) {
       this.game.handleMonsterDefeat(monster);
     }
@@ -350,6 +363,7 @@ export class ItemEffectHandler {
     this.shootBeam(player.x, player.y, dir, (monster, hitX, hitY) => {
       if (monster) {
         this.game.sound.playHit();
+        this.game.impactFx(monster, dir, true);
         monster.takeDamage(dmg);
         this.game.animations.addDamageNumber(monster.x, monster.y, dmg, '#ef4444');
         this.game.addLog(`紅蓮の炎が${monster.name}を焼き尽くす！ ${dmg}のダメージ！`, 'danger');
