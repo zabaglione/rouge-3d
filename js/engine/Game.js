@@ -1,23 +1,23 @@
 /**
  * ゲームステート・ターン管理・統合ゲームエンジン
  */
-import { CONFIG } from '../config.js?v=20260924_11';
-import { sound } from './Audio.js?v=20260924_11';
-import { InputManager } from './Input.js?v=20260924_11';
-import { Renderer } from './Renderer.js?v=20260924_11';
-import { AnimationEngine } from './Animation.js?v=20260924_11';
-import { fxClock } from './FxClock.js?v=20260924_11';
-import { DungeonGenerator } from '../dungeon/DungeonGen.js?v=20260924_11';
-import { DungeonMap } from '../dungeon/Map.js?v=20260924_11';
-import { Player } from '../entities/Player.js?v=20260924_11';
-import { Monster } from '../entities/Monster.js?v=20260924_11';
-import { Item, ITEM_TYPES } from '../items/Item.js?v=20260924_11';
-import { Inventory } from '../items/Inventory.js?v=20260924_11';
-import { ItemEffectHandler } from '../items/ItemEffects.js?v=20260924_11';
-import { HUD } from '../ui/HUD.js?v=20260924_11';
-import { InventoryUI } from '../ui/InventoryUI.js?v=20260924_11';
-import { OverlayMap } from '../ui/OverlayMap.js?v=20260924_11';
-import { VirtualPad } from '../ui/VirtualPad.js?v=20260924_11';
+import { CONFIG } from '../config.js?v=20260925_01';
+import { sound } from './Audio.js?v=20260925_01';
+import { InputManager } from './Input.js?v=20260925_01';
+import { AnimationEngine } from './Animation.js?v=20260925_01';
+import { fxClock } from './FxClock.js?v=20260925_01';
+import { DungeonGenerator } from '../dungeon/DungeonGen.js?v=20260925_01';
+import { DungeonMap } from '../dungeon/Map.js?v=20260925_01';
+import { Player } from '../entities/Player.js?v=20260925_01';
+import { Monster } from '../entities/Monster.js?v=20260925_01';
+import { Item, ITEM_TYPES } from '../items/Item.js?v=20260925_01';
+import { Inventory } from '../items/Inventory.js?v=20260925_01';
+import { ItemEffectHandler } from '../items/ItemEffects.js?v=20260925_01';
+import { HUD } from '../ui/HUD.js?v=20260925_01';
+import { InventoryUI } from '../ui/InventoryUI.js?v=20260925_01';
+import { OverlayMap } from '../ui/OverlayMap.js?v=20260925_01';
+import { VirtualPad } from '../ui/VirtualPad.js?v=20260925_01';
+import { MONSTER_GLYPHS } from '../gfx/glyphs.js?v=20260925_01';
 
 // アイテムが既存アイテムと重ならないよう転がる最大距離（マス）
 const ITEM_SCATTER_RADIUS = 3;
@@ -85,8 +85,9 @@ export class Game {
     this.lastFrameTime = performance.now();
   }
 
-  init(canvas) {
-    this.renderer = new Renderer(canvas);
+  // renderer: 初期化済みの Renderer3D
+  init(renderer) {
+    this.renderer = renderer;
     this.hud = new HUD();
     this.inventoryUI = new InventoryUI(this);
     this.virtualPad = new VirtualPad(this.input);
@@ -148,6 +149,12 @@ export class Game {
       this.animations.shake(0.3 + ratio * 1.2);
       this.animations.hurt(0.45 + ratio * 1.5);
       this.animations.vibrate(amount >= this.player.maxHp * 0.2 ? 60 : 30);
+      this.animations.aberration(0.5 + ratio * 2);
+      if (ratio >= 0.2) {
+        // 大きな一撃：画面を寄せて一瞬スローに
+        this.animations.zoomPunch(0.1);
+        this.animations.slowMo(0.35, 180);
+      }
       this.hitStop(DAMAGED_HIT_STOP_MS);
       fxClock.run(() => this.hud.onPlayerHit(amount));
     };
@@ -168,6 +175,8 @@ export class Game {
   // フロア生成
   generateFloor(floorNumber) {
     this.currentFloor = floorNumber;
+    // 地形を作り直すための通し番号（生成器はタイル配列を使い回すため）
+    this.floorSerial = (this.floorSerial || 0) + 1;
     const genData = this.generator.generate(floorNumber);
     this.map.init(genData);
 
@@ -227,9 +236,6 @@ export class Game {
 
     // トラップ生成（フロアに3〜6個配置）
     this.map.spawnTraps(Math.floor(Math.random() * 4) + 3);
-
-    // BGM開始
-    this.sound.startBGM();
   }
 
   // 視界更新
@@ -240,7 +246,10 @@ export class Game {
     const room = this.map.getRoomAt(this.player.x, this.player.y);
     if (room && room.isMonsterHouse && !room.alerted) {
       room.alerted = true;
-      this.sound.playTrap();
+      this.sound.playAlarm();
+      this.animations.flash('#ff2020', 0.35, 500);
+      this.animations.shake(0.5);
+      this.animations.aberration(1.2);
       this.addLog('⚡ 警報！ モンスターハウスに迷い込んでしまった！ ⚡', 'danger');
     }
   }
@@ -250,8 +259,11 @@ export class Game {
     const deltaMs = Math.min(now - this.lastFrameTime, 100);
     this.lastFrameTime = now;
 
+    // スローモーション中はゲーム内の時間をゆっくり進める
+    const gameDelta = deltaMs * this.animations.getTimeScale();
+
     // 0. 演出の順番待ち・ヒットストップの進行
-    fxClock.update(deltaMs);
+    fxClock.update(gameDelta);
     this.updatePendingModal(deltaMs);
 
     // 1. 入力処理
@@ -260,17 +272,17 @@ export class Game {
 
     // 2. エンティティのスムーズ描画座標補間（ヒットストップ中は止める）
     if (!fxClock.isFrozen()) {
-      this.player.updateRenderPos(deltaMs);
+      this.player.updateRenderPos(gameDelta);
       for (const m of this.monsters) {
-        m.updateRenderPos(deltaMs);
+        m.updateRenderPos(gameDelta);
       }
     }
 
     // 3. アニメーションエンジン更新
-    this.animations.update(deltaMs);
+    this.animations.update(deltaMs, gameDelta);
 
-    // 4. メインCanvas描画
-    this.renderer.render(this, deltaMs);
+    // 4. 3D 描画
+    this.renderer.render(this, deltaMs, gameDelta);
 
     // 5. オーバーレイマップ描画
     this.overlayMap.render(this.renderer, this);
@@ -495,14 +507,17 @@ export class Game {
     monster.takeDamage(dmg);
     this.animations.addDamageNumber(monster.x, monster.y, dmg, isCrit ? '#facc15' : '#ffffff', isCrit);
 
-    // 手応え：打撃音・火花・ヒットストップ・カメラの反動
+    // 手応え：打撃音・火花・ヒットストップ・カメラの反動と寄り
     this.sound.playHit(isCrit);
     this.animations.addHitSpark(monster.x, monster.y, dir, isCrit);
     this.animations.kick(dir, isCrit ? 9 : 5);
     this.animations.shake(isCrit ? 0.55 : 0.22);
+    this.animations.focus(monster.x, monster.y, isCrit ? 0.3 : 0.12);
     if (isCrit) {
-      this.animations.zoomPunch(0.06);
-      this.animations.flash('#fef9c3', 0.28, 160);
+      this.animations.zoomPunch(0.12);
+      this.animations.flash('#fef9c3', 0.45, 200);
+      this.animations.aberration(1.4);
+      this.animations.slowMo(0.25, 260);
       this.animations.vibrate(35);
     }
     this.hitStop(isCrit ? CRIT_HIT_STOP_MS : HIT_STOP_MS);
@@ -521,7 +536,9 @@ export class Game {
   // モンスター撃破
   handleMonsterDefeat(monster) {
     this.sound.playEnemyDefeat();
-    this.animations.addDeath(monster.x, monster.y, monster.icon, monster.color);
+    this.animations.addDeath(monster.x, monster.y, MONSTER_GLYPHS[monster.defId] || '?', monster.color);
+    this.animations.slowMo(0.35, 200);
+    this.animations.focus(monster.x, monster.y, 0.2);
     this.animations.addFloatingText(monster.x, monster.y - 0.5, `+${monster.exp} EXP`, '#4ade80', 0.8);
     this.animations.shake(0.3);
     this.animations.vibrate(25);
@@ -817,10 +834,11 @@ export class Game {
   gameOver(cause) {
     this.state = GAME_STATES.GAME_OVER;
     this.stopDash();
-    this.sound.stopBGM();
     this.sound.playGameOver();
     this.animations.flash('#7f1d1d', 0.55, 900);
     this.animations.shake(0.9);
+    this.animations.aberration(2);
+    this.animations.slowMo(0.3, 900);
     this.animations.vibrate(200);
 
     const causeEl = document.getElementById('game-over-cause');
@@ -839,7 +857,6 @@ export class Game {
   gameClear() {
     this.state = GAME_STATES.GAME_CLEAR;
     this.stopDash();
-    this.sound.stopBGM();
     this.sound.playLevelUp();
 
     const modal = document.getElementById('game-clear-modal');

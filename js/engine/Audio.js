@@ -1,8 +1,8 @@
 /**
- * Web Audio API によるプロシージャルサウンド＆BGMジェネレータ
- * 外部アセット不要で、高品質なレトロ調SEとBGMをリアルタイム合成
+ * Web Audio API によるプロシージャル効果音（外部アセット不要）
+ * 石造りのダンジョンらしい残響（生成したインパルス応答による畳み込み）を全SEにかける
  */
-import { fxClock } from './FxClock.js?v=20260924_11';
+import { fxClock } from './FxClock.js?v=20260925_01';
 
 // 同じ音の繰り返しで単調にならないよう、鳴らすたびにピッチを揺らす幅（±割合）
 const PITCH_VARIANCE = 0.06;
@@ -11,13 +11,8 @@ export class SoundEngine {
   constructor() {
     this.ctx = null;
     this.masterGain = null;
-    this.bgmGain = null;
     this.seGain = null;
     this.isMuted = false;
-    this.bgmPlaying = false;
-    this.bgmTimer = null;
-    this.currentScale = [0, 3, 5, 7, 10]; // マイナーペンタトニック
-    this.baseFreq = 110; // A2
     this.noiseBuffer = null;
 
     // SE は演出の順番待ち（敵の反撃など）に合わせて鳴らす
@@ -55,9 +50,14 @@ export class SoundEngine {
       this.seGain.gain.setValueAtTime(0.8, this.ctx.currentTime);
       this.seGain.connect(this.masterGain);
 
-      this.bgmGain = this.ctx.createGain();
-      this.bgmGain.gain.setValueAtTime(0.25, this.ctx.currentTime);
-      this.bgmGain.connect(this.masterGain);
+      // 残響（石の広間）：SE の一部を畳み込みリバーブへ送る
+      this.reverb = this.ctx.createConvolver();
+      this.reverb.buffer = this.createImpulse(2.2, 2.6);
+      this.reverbSend = this.ctx.createGain();
+      this.reverbSend.gain.setValueAtTime(0.28, this.ctx.currentTime);
+      this.seGain.connect(this.reverbSend);
+      this.reverbSend.connect(this.reverb);
+      this.reverb.connect(this.masterGain);
     } catch (e) {
       console.warn('AudioContext not supported or blocked:', e);
     }
@@ -70,6 +70,26 @@ export class SoundEngine {
     if (this.ctx && this.ctx.state === 'suspended') {
       this.ctx.resume();
     }
+  }
+
+  // 減衰するステレオノイズでインパルス応答を作る（高域ほど早く減衰させ石の部屋らしくする）
+  createImpulse(seconds, decay) {
+    const rate = this.ctx.sampleRate;
+    const len = Math.floor(rate * seconds);
+    const buf = this.ctx.createBuffer(2, len, rate);
+    for (let ch = 0; ch < 2; ch++) {
+      const data = buf.getChannelData(ch);
+      let lp = 0;
+      for (let i = 0; i < len; i++) {
+        const t = i / len;
+        const k = 0.15 + 0.6 * t; // 後半ほど丸い音に
+        lp += ((Math.random() * 2 - 1) - lp) * (1 - k);
+        // 初期反射（最初の 60ms に数発）
+        const early = i < rate * 0.06 && Math.random() < 0.002 ? (Math.random() * 2 - 1) * 3 : 0;
+        data[i] = (lp + early) * Math.pow(1 - t, decay);
+      }
+    }
+    return buf;
   }
 
   toggleMute() {
@@ -133,6 +153,8 @@ export class SoundEngine {
     const v = this.vary(0.15);
     this.tone({ type: 'triangle', f0: 95 * v, f1: 40, dur: 0.06, vol: 0.12 });
     this.noise({ dur: 0.04, vol: 0.06, filter: 'bandpass', f0: 1400 * v, q: 0.8 });
+    // 鎧の擦れる金属音
+    this.tone({ type: 'triangle', f0: 2400 * v, f1: 2300 * v, dur: 0.05, vol: 0.018, delay: 0.02 });
   }
 
   // 壁にぶつかった（鈍い「ゴツッ」）
@@ -174,6 +196,10 @@ export class SoundEngine {
       this.tone({ type: 'triangle', f0: 2637, f1: 2600, dur: 0.3, vol: 0.1, delay: 0.05 });
       this.tone({ type: 'sine', f0: 110, f1: 30, dur: 0.35, vol: 0.6, delay: 0.035 });
       this.noise({ dur: 0.25, vol: 0.3, filter: 'lowpass', f0: 1200, f1: 80, delay: 0.05 });
+      // 腹に響く重低音のうねり（スローモーションに合わせて長く）
+      this.tone({ type: 'sine', f0: 60, f1: 22, dur: 0.9, vol: 0.7, delay: 0.04 });
+      // 刃が鳴る「シャキーン」
+      this.noise({ dur: 0.5, vol: 0.12, filter: 'bandpass', f0: 6500, f1: 5000, q: 6, delay: 0.04 });
     }
   }
 
@@ -188,6 +214,60 @@ export class SoundEngine {
     this.tone({ type: 'sawtooth', f0: 90, f1: 55, dur: 0.12, vol: 0.12, delay: 0.02 });
   }
 
+  // 敵の攻撃音：記号の系統ごとに噛みつき・爪・打撃・呪いを鳴らし分ける
+  playMonsterAttack(defId) {
+    if (this.isMuted || !this.ctx) return;
+    this.ensureContext();
+    const v = this.vary(0.1);
+    const bite = ['horned_rabbit', 'giant_ant', 'kobold', 'hydra', 'vampire', 'dragon', 'rust_monster'];
+    const claw = ['cave_bat', 'gargoyle', 'shadow_stalker', 'arch_demon', 'nymph', 'leprechaun'];
+    const ghost = ['phantom', 'wraith', 'lich', 'medusa', 'beholder'];
+    const slime = ['slime', 'mimic'];
+    if (bite.includes(defId)) {
+      // ガブッ：短いノイズを2回（上下の顎）＋低いうなり
+      this.noise({ dur: 0.05, vol: 0.35, filter: 'bandpass', f0: 1800 * v, q: 2 });
+      this.noise({ dur: 0.06, vol: 0.35, filter: 'bandpass', f0: 1200 * v, q: 2, delay: 0.05 });
+      this.tone({ type: 'sawtooth', f0: 110 * v, f1: 70, dur: 0.2, vol: 0.12 });
+    } else if (claw.includes(defId)) {
+      // シャッ：高い擦過音を3本
+      for (let i = 0; i < 3; i++) {
+        this.noise({ dur: 0.06, vol: 0.2, filter: 'bandpass', f0: (4200 - i * 600) * v, f1: 1500, q: 3, delay: i * 0.025 });
+      }
+    } else if (ghost.includes(defId)) {
+      // ヒュオォ：冷たい囁き
+      this.noise({ dur: 0.35, vol: 0.2, filter: 'bandpass', f0: 600 * v, f1: 2400, q: 8 });
+      this.tone({ type: 'sine', f0: 880 * v, f1: 440, dur: 0.3, vol: 0.06 });
+    } else if (slime.includes(defId)) {
+      // ベチャッ
+      this.tone({ type: 'sine', f0: 300 * v, f1: 80, dur: 0.15, vol: 0.3 });
+      this.noise({ dur: 0.1, vol: 0.2, filter: 'lowpass', f0: 900, f1: 200 });
+    } else {
+      // ドゴッ：棍棒・拳
+      this.tone({ type: 'sine', f0: 90 * v, f1: 40, dur: 0.15, vol: 0.4 });
+      this.noise({ dur: 0.08, vol: 0.3, filter: 'lowpass', f0: 1200, f1: 300 });
+    }
+  }
+
+  // 矢が突き刺さる
+  playArrowHit() {
+    if (this.isMuted || !this.ctx) return;
+    this.ensureContext();
+    this.noise({ dur: 0.03, vol: 0.4, filter: 'highpass', f0: 3000 });
+    this.tone({ type: 'triangle', f0: 320, f1: 180, dur: 0.12, vol: 0.2 });
+    this.tone({ type: 'sine', f0: 140, f1: 60, dur: 0.12, vol: 0.3 });
+  }
+
+  // モンスターハウスの警報（不協和音のサイレン）
+  playAlarm() {
+    if (this.isMuted || !this.ctx) return;
+    this.ensureContext();
+    for (let i = 0; i < 3; i++) {
+      this.tone({ type: 'sawtooth', f0: 440, f1: 880, dur: 0.22, vol: 0.14, delay: i * 0.26 });
+      this.tone({ type: 'sawtooth', f0: 466, f1: 932, dur: 0.22, vol: 0.1, delay: i * 0.26 });
+    }
+    this.tone({ type: 'sine', f0: 55, f1: 40, dur: 0.9, vol: 0.5 });
+  }
+
   // 敵撃破音（砕ける破裂音＋消えていく音）
   playEnemyDefeat() {
     if (this.isMuted || !this.ctx) return;
@@ -198,6 +278,10 @@ export class SoundEngine {
     [523.25, 392, 261.63, 196].forEach((freq, idx) => {
       this.tone({ type: 'square', f0: freq * v, f1: freq * v * 0.7, dur: 0.09, vol: 0.09, delay: 0.06 + idx * 0.045 });
     });
+    // 記号が砕け散るガラス質の破片音
+    for (let i = 0; i < 6; i++) {
+      this.tone({ type: 'triangle', f0: (2500 + Math.random() * 3000), dur: 0.08 + Math.random() * 0.1, vol: 0.05, delay: 0.02 + i * 0.03 });
+    }
     // 経験値が入るキラッという音
     this.tone({ type: 'triangle', f0: 1318.5, dur: 0.18, vol: 0.1, delay: 0.26 });
     this.tone({ type: 'triangle', f0: 1975.5, dur: 0.22, vol: 0.08, delay: 0.31 });
@@ -286,6 +370,11 @@ export class SoundEngine {
       osc.start(t + idx * 0.09);
       osc.stop(t + idx * 0.09 + dur);
     });
+    // 余韻の和音（C メジャー）
+    for (const f of [261.63, 329.63, 392, 523.25]) {
+      this.tone({ type: 'sine', f0: f, dur: 1.4, vol: 0.07, delay: 0.45, attack: 0.08 });
+      this.tone({ type: 'triangle', f0: f * 2.003, dur: 1.2, vol: 0.025, delay: 0.47, attack: 0.1 });
+    }
   }
 
   // 階段を降りる
@@ -308,6 +397,12 @@ export class SoundEngine {
       osc.start(t + idx * 0.08);
       osc.stop(t + idx * 0.08 + 0.18);
     });
+    // 石段を降りていく足音と、地の底からの響き
+    for (let k = 0; k < 5; k++) {
+      this.tone({ type: 'triangle', f0: 110 - k * 8, f1: 45, dur: 0.08, vol: 0.18, delay: 0.1 + k * 0.12 });
+    }
+    this.noise({ dur: 1.4, vol: 0.18, filter: 'lowpass', f0: 300, f1: 60, delay: 0.2 });
+    this.tone({ type: 'sine', f0: 48, f1: 36, dur: 1.6, vol: 0.45, delay: 0.2 });
   }
 
   // UI決定音 / メニュー選択音
@@ -436,54 +531,6 @@ export class SoundEngine {
     });
   }
 
-  // --- BGM 自動生成＆再生ループ ---
-  startBGM() {
-    if (this.bgmPlaying) return;
-    this.ensureContext();
-    this.bgmPlaying = true;
-    this.scheduleBGMStep();
-  }
-
-  stopBGM() {
-    this.bgmPlaying = false;
-    if (this.bgmTimer) {
-      clearTimeout(this.bgmTimer);
-      this.bgmTimer = null;
-    }
-  }
-
-  scheduleBGMStep() {
-    if (!this.bgmPlaying || !this.ctx || this.isMuted) {
-      this.bgmTimer = setTimeout(() => this.scheduleBGMStep(), 500);
-      return;
-    }
-
-    // ランダムな神秘的アルペジオノートの生成（マイナーペンタトニック）
-    const semitones = this.currentScale[Math.floor(Math.random() * this.currentScale.length)];
-    const octave = Math.random() > 0.6 ? 2 : 1;
-    const freq = this.baseFreq * Math.pow(2, (semitones + (octave - 1) * 12) / 12);
-
-    const t = this.ctx.currentTime;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-    
-    // 柔らかいFM/パッド調サウンド
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(freq, t);
-
-    gain.gain.setValueAtTime(0.001, t);
-    gain.gain.linearRampToValueAtTime(0.08, t + 0.1);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.8);
-
-    osc.connect(gain);
-    gain.connect(this.bgmGain);
-
-    osc.start(t);
-    osc.stop(t + 0.85);
-
-    const nextTime = Math.random() * 250 + 200; // 200~450msの間隔
-    this.bgmTimer = setTimeout(() => this.scheduleBGMStep(), nextTime);
-  }
 }
 
 export const sound = new SoundEngine();

@@ -1,7 +1,8 @@
 /**
  * メインエントリーポイント
  */
-import { Game } from './engine/Game.js?v=20260924_11';
+import { Game } from './engine/Game.js?v=20260925_01';
+import { Renderer3D } from './gfx/Renderer3D.js?v=20260925_01';
 
 // これより短い間隔の2回目のタップはダブルタップ（拡大）とみなして抑止する (ms)
 const DOUBLE_TAP_INTERVAL = 350;
@@ -71,10 +72,30 @@ function preventIOSZoom() {
   document.addEventListener('dblclick', (e) => e.preventDefault(), { passive: false });
 }
 
-window.addEventListener('DOMContentLoaded', () => {
+// WebGPU 非対応・初期化失敗時の案内
+function showWebGPUError(err) {
+  const el = document.createElement('div');
+  el.id = 'webgpu-error';
+  el.innerHTML = `<div><h2>WebGPU を利用できません</h2>
+    <p>このゲームの描画には WebGPU が必要です。<br>
+    Chrome / Edge（最新版）、Safari 26 以降、Firefox 141 以降（Windows）などでお試しください。</p>
+    <p style="opacity:.6;font-size:.85rem;margin-top:12px">${String(err && err.message ? err.message : err)}</p></div>`;
+  document.getElementById('canvas-wrapper').appendChild(el);
+}
+
+window.addEventListener('DOMContentLoaded', async () => {
   const canvas = document.getElementById('game-canvas');
+  const fxCanvas = document.getElementById('fx-canvas');
+  let renderer;
+  try {
+    renderer = await Renderer3D.create(canvas, fxCanvas);
+  } catch (err) {
+    console.error(err);
+    showWebGPUError(err);
+    return;
+  }
   const game = new Game();
-  game.init(canvas);
+  game.init(renderer);
 
   // ヘルプモーダル
   const helpModal = document.getElementById('help-modal');

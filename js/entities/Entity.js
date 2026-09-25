@@ -1,8 +1,8 @@
 /**
  * キャラクター・モンスターの共通基底エンティティ
  */
-import { CONFIG } from '../config.js?v=20260924_11';
-import { fxClock } from '../engine/FxClock.js?v=20260924_11';
+import { CONFIG } from '../config.js?v=20260925_01';
+import { fxClock } from '../engine/FxClock.js?v=20260925_01';
 
 // 攻撃の踏み込み・被弾ののけぞりモーションの長さ (ms)
 export const ATTACK_ANIM_MS = 160;
@@ -63,7 +63,8 @@ export class Entity {
 
   // 描画座標のスムーズ補間（毎フレーム呼び出し）
   updateRenderPos(deltaMs) {
-    const speed = 0.28; // 補間係数
+    // 60fps で1フレーム 28% 近づく速さ（経過時間に比例させ、スローモーションにも対応）
+    const speed = 1 - Math.exp(-0.0197 * deltaMs);
     this.renderX += (this.targetRenderX - this.renderX) * speed;
     this.renderY += (this.targetRenderY - this.renderY) * speed;
 

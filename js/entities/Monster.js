@@ -1,9 +1,11 @@
 /**
  * モンスターの定義、出現テーブル、AI行動ロジック（全24種・オリジナルローグ級）
  */
-import { Entity } from './Entity.js?v=20260924_11';
-import { CONFIG } from '../config.js?v=20260924_11';
-import { Item } from '../items/Item.js?v=20260924_11';
+import { Entity } from './Entity.js?v=20260925_01';
+import { CONFIG } from '../config.js?v=20260925_01';
+import { Item } from '../items/Item.js?v=20260925_01';
+import { fxClock } from '../engine/FxClock.js?v=20260925_01';
+import { projectileFlightMs } from '../engine/Animation.js?v=20260925_01';
 
 export const MONSTER_DEFINITIONS = [
   // --- 浅層 (B1〜B4) ---
@@ -537,6 +539,7 @@ export class Monster extends Entity {
   attackPlayer(player, game) {
     this.triggerAttackAnim();
     player.setHitFrom(this);
+    game.sound.playMonsterAttack(this.defId);
     game.sound.playPlayerDamage();
 
     // 防御計算
@@ -637,10 +640,18 @@ export class Monster extends Entity {
     game.sound.playThrow();
     game.animations.addProjectile(this.x, this.y, player.x, player.y, '🏹');
 
-    const dmg = Math.max(1, this.atk - Math.floor(player.getTotalDef(game.inventory) * 0.5));
-    player.takeDamage(dmg);
-    game.animations.addDamageNumber(player.x, player.y, dmg, '#ef4444');
-    game.addLog(`${this.name}の放った骨の矢が命中！ ${dmg}のダメージ！`, 'danger');
+    // 命中の演出は矢が届いた瞬間に合わせる
+    const prevDelay = fxClock.delayMs;
+    fxClock.delayMs = prevDelay + projectileFlightMs(this.x, this.y, player.x, player.y);
+    try {
+      const dmg = Math.max(1, this.atk - Math.floor(player.getTotalDef(game.inventory) * 0.5));
+      game.sound.playArrowHit();
+      player.takeDamage(dmg);
+      game.animations.addDamageNumber(player.x, player.y, dmg, '#ef4444');
+      game.addLog(`${this.name}の放った骨の矢が命中！ ${dmg}のダメージ！`, 'danger');
+    } finally {
+      fxClock.delayMs = prevDelay;
+    }
   }
 
   // メドゥーサの石化視線

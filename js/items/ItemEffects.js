@@ -1,14 +1,13 @@
 /**
  * アイテム使用・読解・振下・投擲時の効果ロジック
  */
-import { ITEM_TYPES, Item } from './Item.js?v=20260924_11';
-import { fxClock } from '../engine/FxClock.js?v=20260924_11';
+import { ITEM_TYPES, Item } from './Item.js?v=20260925_01';
+import { fxClock } from '../engine/FxClock.js?v=20260925_01';
+import { projectileFlightMs } from '../engine/Animation.js?v=20260925_01';
 
 // 衝撃波の杖：吹き飛ばす最大距離と激突ダメージ
 const KNOCKBACK_DISTANCE = 10;
 const KNOCKBACK_DAMAGE = 5;
-// 投げた物・矢が敵に届くまでの時間 (ms)。命中の演出はこの分だけ遅らせる
-const PROJECTILE_FLIGHT_MS = 170;
 
 export class ItemEffectHandler {
   constructor(game) {
@@ -180,7 +179,7 @@ export class ItemEffectHandler {
     const dir = player.facing;
     this.game.addLog(`${item.name}を${dir.label}方向に射撃した！`, 'normal');
 
-    this.shootProjectile(player.x, player.y, dir, item.icon, (monster, hitX, hitY) => {
+    this.shootProjectile(player.x, player.y, dir, item, (monster, hitX, hitY) => {
       if (monster) {
         this.game.sound.playHit();
         this.game.impactFx(monster, dir);
@@ -212,7 +211,7 @@ export class ItemEffectHandler {
     const dir = player.facing;
     this.game.addLog(`${item.name}を${dir.label}方向に投げた！`, 'normal');
 
-    this.shootProjectile(player.x, player.y, dir, item.icon, (monster, hitX, hitY) => {
+    this.shootProjectile(player.x, player.y, dir, item, (monster, hitX, hitY) => {
       if (monster) {
         this.game.sound.playHit();
         this.game.impactFx(monster, dir);
@@ -283,7 +282,8 @@ export class ItemEffectHandler {
   }
 
   // 投擲物・矢の軌道アニメーションと衝突判定
-  shootProjectile(startX, startY, dir, icon, callback) {
+  shootProjectile(startX, startY, dir, item, callback) {
+    const icon = item.icon;
     let cx = startX;
     let cy = startY;
     const maxRange = 10;
@@ -296,7 +296,7 @@ export class ItemEffectHandler {
 
       // 壁に激突
       if (!this.game.map.isWalkable(nextX, nextY)) {
-        this.game.animations.addProjectile(startX, startY, lastValidX, lastValidY, icon);
+        this.game.animations.addProjectile(startX, startY, lastValidX, lastValidY, icon, item);
         callback(null, lastValidX, lastValidY);
         return;
       }
@@ -304,9 +304,9 @@ export class ItemEffectHandler {
       // モンスターに命中
       const m = this.game.getMonsterAt(nextX, nextY);
       if (m) {
-        this.game.animations.addProjectile(startX, startY, nextX, nextY, icon);
+        this.game.animations.addProjectile(startX, startY, nextX, nextY, icon, item);
         // 命中の演出は、飛んでいった物が届いた瞬間に合わせる
-        fxClock.delayMs = PROJECTILE_FLIGHT_MS;
+        fxClock.delayMs = projectileFlightMs(startX, startY, nextX, nextY);
         try {
           callback(m, nextX, nextY);
         } finally {
@@ -321,7 +321,7 @@ export class ItemEffectHandler {
       lastValidY = cy;
     }
 
-    this.game.animations.addProjectile(startX, startY, lastValidX, lastValidY, icon);
+    this.game.animations.addProjectile(startX, startY, lastValidX, lastValidY, icon, item);
     callback(null, lastValidX, lastValidY);
   }
 
