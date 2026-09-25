@@ -1,8 +1,8 @@
 /**
  * キャラクター・モンスターの共通基底エンティティ
  */
-import { CONFIG } from '../config.js?v=20260925_04';
-import { fxClock } from '../engine/FxClock.js?v=20260925_04';
+import { CONFIG } from '../config.js?v=20260925_05';
+import { fxClock } from '../engine/FxClock.js?v=20260925_05';
 
 // 攻撃の踏み込み・被弾ののけぞりモーションの長さ (ms)
 export const ATTACK_ANIM_MS = 160;

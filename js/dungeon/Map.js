@@ -1,8 +1,8 @@
 /**
  * ダンジョンマップ状態管理・視界 (FoV)・通行/角抜け判定
  */
-import { CONFIG } from '../config.js?v=20260925_04';
-import { Trap, TRAP_TYPES } from './Trap.js?v=20260925_04';
+import { CONFIG } from '../config.js?v=20260925_05';
+import { Trap, TRAP_TYPES } from './Trap.js?v=20260925_05';
 
 export class DungeonMap {
   constructor(width, height) {
@@ -39,6 +39,8 @@ export class DungeonMap {
     this.features = new Map((genData.features || []).map(f => [f.y * this.width + f.x, { x: f.x, y: f.y, type: f.type }]));
     this.niches = genData.niches || [];
     this.style = genData.style || 'rooms';
+    // 地形の見た目が変わるたびに増やす（描画側が作り直す合図）
+    this.revision = 0;
   }
 
   getDoor(x, y) {

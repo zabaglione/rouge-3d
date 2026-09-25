@@ -7,23 +7,23 @@
  * - 演出：加算合成のパーティクル、HDR＋ブルーム、色収差、ビネット、カメラワーク
  * - 文字（ダメージ数値・階層名・HPバー）は上に重ねた 2D キャンバスに描く
  */
-import { CONFIG } from '../config.js?v=20260925_04';
-import { ATTACK_ANIM_MS, DAMAGE_ANIM_MS } from '../entities/Entity.js?v=20260925_04';
-import { GAME_STATES } from '../engine/Game.js?v=20260925_04';
-import { FX } from '../engine/Animation.js?v=20260925_04';
+import { CONFIG } from '../config.js?v=20260925_05';
+import { ATTACK_ANIM_MS, DAMAGE_ANIM_MS } from '../entities/Entity.js?v=20260925_05';
+import { GAME_STATES } from '../engine/Game.js?v=20260925_05';
+import { FX } from '../engine/Animation.js?v=20260925_05';
 import {
   mat4, multiply, perspective, lookAt, invert, compose, transformPoint, lerp, lerpAngle, damp, hexToRgb, clamp,
-} from './math.js?v=20260925_04';
-import { MeshBuilder, VERTEX_STRIDE, VERTEX_FLOATS } from './geometry.js?v=20260925_04';
+} from './math.js?v=20260925_05';
+import { MeshBuilder, VERTEX_STRIDE, VERTEX_FLOATS } from './geometry.js?v=20260925_05';
 import {
   MAX_LIGHTS, MESH_SHADER, GLYPH_SHADER, FX_SHADER, BLOOM_DOWN_SHADER, BLOOM_UP_SHADER, COMPOSITE_SHADER,
-} from './shaders.js?v=20260925_04';
-import { buildWorld } from './world.js?v=20260925_04';
+} from './shaders.js?v=20260925_05';
+import { buildWorld } from './world.js?v=20260925_05';
 import {
   buildPlayerParts, buildSword, buildShield, buildItemModel, buildChest, writeCape, HIP_Y, SHOULDER,
   buildDoorLeaf, buildBrokenDoor, buildFountain, buildAltar, buildSink, buildGrave,
-} from './models.js?v=20260925_04';
-import { buildGlyphAtlas, MONSTER_GLYPHS, TRAP_GLYPH } from './glyphs.js?v=20260925_04';
+} from './models.js?v=20260925_05';
+import { buildGlyphAtlas, MONSTER_GLYPHS, TRAP_GLYPH } from './glyphs.js?v=20260925_05';
 
 const HDR_FORMAT = 'rgba16float';
 const DEPTH_FORMAT = 'depth24plus';
@@ -508,16 +508,22 @@ export class Renderer3D {
   }
 
   // 階層が変わったら地形を作り直す
+  // 階が変わったら地形を作り直し、同じ階で地形が変わった（部屋に明かりが灯った等）ら形だけ作り直す
   syncWorld(game) {
-    const key = game.floorSerial;
-    if (this.floorKey === key && this.world) return;
-    this.floorKey = key;
+    const floorKey = game.floorSerial;
+    const rev = game.map.revision || 0;
+    if (this.floorKey === floorKey && this.worldRev === rev && this.world) return;
+    const newFloor = this.floorKey !== floorKey;
+    this.floorKey = floorKey;
+    this.worldRev = rev;
     if (this.world) this.world.mesh.buf.destroy();
     const w = buildWorld(game.map);
     this.world = { mesh: this.mesh(w.vertices), lights: w.lights, flames: w.flames };
-    this.fogVis.fill(0);
-    this.fogMem.fill(0);
-    this.snapCamera = true;
+    if (newFloor) {
+      this.fogVis.fill(0);
+      this.fogMem.fill(0);
+      this.snapCamera = true;
+    }
   }
 
   // 視界テクスチャを滑らかに追従させて転送
