@@ -450,7 +450,7 @@ export class Monster extends Entity {
     // 視界・認識チェック
     const myRoom = game.map.getRoomAt(this.x, this.y);
     const playerRoom = game.map.getRoomAt(player.x, player.y);
-    const inSameRoom = myRoom && playerRoom && myRoom === playerRoom;
+    const inSameRoom = myRoom && playerRoom && myRoom === playerRoom && myRoom.lit !== false;
     const hasLOS = game.map.hasLineOfSight(this.x, this.y, player.x, player.y);
 
     if (inSameRoom || (hasLOS && dist <= 7)) {
@@ -737,6 +737,42 @@ export class Monster extends Entity {
 
   // プレイヤー追跡（最短経路または障害物迂回）
   chasePlayer(player, game) {
+    // 経路探索：プレイヤーまでの歩数が減る方向へ進む（うねった通路や扉の向こうでも追ってくる）
+    if (!this.canPassWalls && game.distField) {
+      const map = game.map;
+      const W = map.width;
+      let bestD = game.distField[this.y * W + this.x];
+      let best = null;
+      for (const dir of CONFIG.DIRECTIONS) {
+        const nx = this.x + dir.dx, ny = this.y + dir.dy;
+        const d = game.distField[ny * W + nx];
+        if (!(d < bestD)) continue;
+        const door = map.getDoor(nx, ny);
+        if (door && door.state === 'closed' && !dir.isDiagonal) {
+          best = { dir, openDoor: door };
+          bestD = d;
+          continue;
+        }
+        if (!this.canStepTo(nx, ny, game) || game.getMonsterAt(nx, ny)) continue;
+        if (nx === player.x && ny === player.y) continue;
+        best = { dir };
+        bestD = d;
+      }
+      if (best && best.openDoor) {
+        // 閉じた扉を開ける（このターンは移動しない）
+        best.openDoor.state = 'open';
+        if (map.visible[best.openDoor.y] && map.visible[best.openDoor.y][best.openDoor.x]) {
+          game.sound.playDoor(true);
+          game.addLog('扉が開いた。', 'warning');
+        }
+        return;
+      }
+      if (best) {
+        this.move(best.dir.dx, best.dir.dy);
+        return;
+      }
+    }
+
     const dx = player.x - this.x;
     const dy = player.y - this.y;
 

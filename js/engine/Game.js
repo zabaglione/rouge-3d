@@ -39,6 +39,26 @@ const DAMAGED_HIT_STOP_MS = 45;
 // 倒れてからゲームオーバー画面を出すまでの間 (ms)
 const GAME_OVER_MODAL_DELAY = 1100;
 
+// --- NetHack 風の地形 ---
+const FEATURE_NAMES = { fountain: '噴水', sink: '流し台', altar: '祭壇', grave: '墓' };
+// 墓碑銘（オリジナル）
+const EPITAPHS = [
+  'ここに眠る。宝箱を開ける前に、よく見るべきだった。',
+  '「あと一歩で階段だったのに」',
+  '空腹には勝てなかった勇者、ここに眠る。',
+  '彼は最後まで盾を装備し忘れていた。',
+  'ドラゴンに挨拶しようとした者の墓。',
+  '「この巻物、読んでみよう」',
+  '安らかに。そして二度と起き上がるな。',
+  'ミミックを撫でようとした冒険者の墓。',
+  '名もなき探索者、ここに眠る。',
+  '「コボルトなんて楽勝だ」と言っていた。',
+];
+// 祈りの間隔（ターン）
+const PRAYER_TIMEOUT = 300;
+// 敵を配置するとき、開始地点からこれ以上離す（部屋のない階で開始直後に囲まれないように）
+const SPAWN_MIN_DIST = 7;
+
 export const GAME_STATES = {
   TITLE: 'title',
   PLAYING: 'playing',
@@ -180,10 +200,9 @@ export class Game {
     const genData = this.generator.generate(floorNumber);
     this.map.init(genData);
 
-    // プレイヤーを初期部屋のランダム位置に配置
-    const startTile = this.map.getRandomFloorTile(genData.startRoom);
-    this.player.x = startTile ? startTile.x : genData.startRoom.centerX;
-    this.player.y = startTile ? startTile.y : genData.startRoom.centerY;
+    // プレイヤーを開始地点に配置
+    this.player.x = genData.start.x;
+    this.player.y = genData.start.y;
     this.player.renderX = this.player.x * CONFIG.TILE_SIZE;
     this.player.renderY = this.player.y * CONFIG.TILE_SIZE;
     this.player.targetRenderX = this.player.renderX;
@@ -208,14 +227,18 @@ export class Game {
     if (genData.isMonsterHouse) {
       const mhRoom = genData.rooms.find(r => r.isMonsterHouse);
       if (mhRoom) {
-        for (let i = 0; i < 8; i++) {
+        // NetHack の宝の動物園：眠っている獣たちと、床一面の金貨
+        const beasts = Math.min(14, Math.floor(mhRoom.w * mhRoom.h / 3));
+        for (let i = 0; i < beasts; i++) {
           const p = this.findRandomFreeTile(mhRoom);
-          if (p) this.monsters.push(Monster.spawnRandom(floorNumber, p.x, p.y));
+          if (!p) continue;
+          const m = Monster.spawnRandom(floorNumber, p.x, p.y);
+          m.statusEffects.sleep = 20 + Math.floor(Math.random() * 200);
+          this.monsters.push(m);
         }
-        // アイテムも大盤振る舞い
-        for (let i = 0; i < 6; i++) {
+        for (let i = 0; i < Math.floor(mhRoom.w * mhRoom.h / 3); i++) {
           const p = this.map.getRandomFloorTile(mhRoom);
-          if (p) this.placeItem(Item.getRandomItem(floorNumber), p.x, p.y);
+          if (p) this.placeItem(Math.random() < 0.7 ? Item.createGold(floorNumber) : Item.getRandomItem(floorNumber), p.x, p.y);
         }
       }
     }
@@ -234,8 +257,30 @@ export class Game {
       if (p) this.placeItem(Item.createGold(floorNumber), p.x, p.y);
     }
 
+    // 壁のくぼみ（隠し部屋）にはお宝
+    for (const n of this.map.niches) {
+      this.placeItem(Math.random() < 0.5 ? Item.getRandomItem(floorNumber + 2) : Item.createGold(floorNumber + 3), n.x, n.y);
+    }
+
     // トラップ生成（フロアに3〜6個配置）
     this.map.spawnTraps(Math.floor(Math.random() * 4) + 3);
+
+    this.announceLevel(genData);
+  }
+
+  // 階の雰囲気を伝えるメッセージ（NetHack の「音が聞こえる」）
+  announceLevel(genData) {
+    const intro = {
+      mines: '薄暗い洞窟に出た。まるで鉱山の坑道のようだ…',
+      bigroom: 'とてつもなく広い部屋だ！',
+      maze: '入り組んだ迷路に迷い込んだ…',
+    }[genData.style];
+    if (intro) this.addLog(intro, 'accent');
+    const types = new Set([...this.map.features.values()].map(f => f.type));
+    if (types.has('fountain')) this.addLog('水の湧き出る音が聞こえる。', 'normal');
+    if (types.has('grave')) this.addLog('ひやりとした気配を感じる…', 'normal');
+    if (genData.isMonsterHouse) this.addLog('遠くで何かのいびきが聞こえる…', 'warning');
+    if (this.map.rooms.some(r => r.lit === false)) this.addLog('この階には明かりの消えた部屋があるようだ。', 'normal');
   }
 
   // 視界更新
@@ -407,8 +452,26 @@ export class Game {
       return true;
     }
 
-    // 2. 移動可能性＆角抜けチェック
+    // 2. 閉じた扉は開ける（鍵がかかっていれば蹴破る必要がある）
+    const door = this.map.getDoor(nx, ny);
+    if (!targetMonster && door && (door.state === 'closed' || door.state === 'locked') && !dir.isDiagonal) {
+      this.stopDash();
+      if (door.state === 'locked') {
+        this.sound.playBump();
+        this.addLog('この扉には鍵がかかっている。（扉を向いて攻撃すると蹴破れる）', 'warning');
+        return false;
+      }
+      this.openDoor(door);
+      this.processTurn();
+      return true;
+    }
+
+    // 3. 移動可能性＆角抜けチェック
     if (targetMonster || !this.map.isWalkable(nx, ny) || !this.map.canMoveDiagonal(this.player.x, this.player.y, nx, ny)) {
+      if (!this.isDashing && !targetMonster && this.map.isWalkable(nx, ny) &&
+          (this.map.hasDoorFrame(nx, ny) || this.map.hasDoorFrame(this.player.x, this.player.y))) {
+        this.addLog('扉のある出入口には斜めに出入りできない。', 'normal');
+      }
       // 壁にゴツン（ダッシュの停止時は鳴らさない）
       if (!this.isDashing) {
         this.sound.playBump();
@@ -434,7 +497,19 @@ export class Game {
       this.addLog('下り階段がある。スペース/Aボタンで次の階層へ降りられる。', 'accent');
     }
 
-    // 7. ターン進行
+    // 7. 足元の地形
+    const feat = this.map.getFeature(this.player.x, this.player.y);
+    if (feat) {
+      this.stopDash();
+      if (feat.type === 'grave') {
+        feat.epitaph = feat.epitaph || EPITAPHS[Math.floor(Math.random() * EPITAPHS.length)];
+        this.addLog(`墓がある。墓碑銘：『${feat.epitaph}』`, 'normal');
+      } else {
+        this.addLog(`${FEATURE_NAMES[feat.type]}がある。（攻撃ボタンで調べる）`, 'accent');
+      }
+    }
+
+    // 8. ターン進行
     this.processTurn();
     return true;
   }
@@ -461,9 +536,18 @@ export class Game {
     const canReach = this.map.canMoveDiagonal(this.player.x, this.player.y, targetX, targetY);
     const monster = canReach ? this.getMonsterAt(targetX, targetY) : null;
 
+    const door = !monster && !dir.isDiagonal ? this.map.getDoor(targetX, targetY) : null;
+    const feat = this.map.getFeature(this.player.x, this.player.y);
     if (monster) {
       // モンスターへ攻撃
       this.attackMonster(monster);
+    } else if (door && door.state === 'closed') {
+      this.openDoor(door);
+    } else if (door && door.state === 'locked') {
+      this.kickDoor(door, dir);
+    } else if (feat) {
+      // 足元の地形を調べる（噴水の水を飲む・祭壇で祈る・墓を掘る…）
+      this.interactFeature(feat);
     } else {
       // 素振り（空振り）
       this.player.triggerAttackAnim();
@@ -480,6 +564,140 @@ export class Game {
     }
 
     this.processTurn();
+  }
+
+  // 扉を開ける（NetHack と同じく、固くて開かないこともある）
+  openDoor(door) {
+    if (Math.random() < 0.15) {
+      this.sound.playBump();
+      this.addLog('扉は固くて開かない！', 'warning');
+      return false;
+    }
+    door.state = 'open';
+    this.sound.playDoor(true);
+    this.addLog('扉を開けた。', 'normal');
+    this.updateVisibility();
+    return true;
+  }
+
+  // 鍵のかかった扉を蹴破る
+  kickDoor(door, dir) {
+    this.player.triggerAttackAnim();
+    this.sound.playKick();
+    this.animations.kick(dir, 5);
+    this.animations.shake(0.3);
+    const chance = 0.3 + Math.min(0.4, this.player.lv * 0.03);
+    if (Math.random() < chance) {
+      door.state = 'broken';
+      this.sound.playDoorBreak();
+      this.animations.addExplosionDust(door.x, door.y);
+      this.addLog('WHAMM!! 扉を蹴破った！', 'accent');
+      this.updateVisibility();
+    } else {
+      this.addLog('WHAMM!!', 'normal');
+    }
+  }
+
+  // 足元の地形を調べる
+  interactFeature(feat) {
+    const p = this.player;
+    const F = this.currentFloor;
+    if (feat.type === 'fountain') {
+      this.sound.playFountain();
+      this.animations.addPickup(feat.x, feat.y, null, null, '#60a5fa');
+      const r = Math.random();
+      if (r < 0.25) {
+        const heal = 8 + F;
+        p.heal(heal);
+        p.restoreHunger(5);
+        this.addLog(`冷たい水で喉が潤った。（HP +${heal}）`, 'heal');
+      } else if (r < 0.37) {
+        p.hp = p.maxHp;
+        this.sound.playHeal();
+        this.addLog('泉の水が体に染み渡る。力がみなぎる！', 'heal');
+      } else if (r < 0.52) {
+        p.hunger = Math.max(0, p.hunger - 3);
+        this.addLog('水は生ぬるくて不味い…', 'normal');
+      } else if (r < 0.64) {
+        this.summonNear(feat.x, feat.y, '水の中から何かが飛び出した！');
+      } else if (r < 0.72) {
+        const dmg = 3 + Math.floor(F / 2);
+        p.takeDamage(dmg);
+        this.animations.addDamageNumber(p.x, p.y, dmg, '#a3e635');
+        this.addLog(`水に毒が混じっていた！ ${dmg}のダメージ！`, 'danger');
+      } else if (r < 0.8) {
+        p.gainExp(3 + F * 2, this);
+        this.addLog('水面に映る自分の姿を見て、少し自信が湧いてきた。', 'accent');
+      } else {
+        this.addLog('水を一口飲んだ。特に何も起こらなかった。', 'normal');
+      }
+      if (Math.random() < 1 / 3) {
+        this.map.features.delete(feat.y * this.map.width + feat.x);
+        this.addLog('噴水は枯れてしまった！', 'warning');
+      }
+    } else if (feat.type === 'altar') {
+      this.pray(feat);
+    } else if (feat.type === 'sink') {
+      const r = Math.random();
+      this.sound.playFountain();
+      if (r < 0.5) this.addLog('蛇口をひねると、冷たい水が流れ出した。', 'normal');
+      else if (r < 0.75) this.summonNear(feat.x, feat.y, '排水口から何かが這い出してきた！');
+      else this.addLog('指輪を落としそうなので、やめておいた。', 'normal');
+    } else if (feat.type === 'grave') {
+      this.sound.playDig();
+      this.map.features.delete(feat.y * this.map.width + feat.x);
+      this.addLog('墓を掘り返した…（罰当たりな気がする）', 'warning');
+      if (Math.random() < 0.55) {
+        const item = Item.getRandomItem(F + 2);
+        if (this.placeItem(item, feat.x, feat.y)) this.addLog(`副葬品の【${item.name}】が出てきた！`, 'accent');
+      }
+      if (Math.random() < 0.6) {
+        this.summonNear(feat.x, feat.y, '眠りを妨げられた死者が起き上がった！', F >= 7 ? 'phantom' : (F >= 3 ? 'skeleton_archer' : 'kobold'));
+      }
+    }
+  }
+
+  // 祭壇で祈る（NetHack の祈り：ピンチの時だけ神が応え、祈りすぎると怒りを買う）
+  pray(feat) {
+    const p = this.player;
+    const turn = p.turnCounter;
+    this.sound.playPray();
+    this.animations.addPickup(feat.x, feat.y, null, null, '#fde68a');
+    this.animations.flash('#fff2c0', 0.3, 400);
+    if (turn < (this.prayerTimeout || 0)) {
+      const dmg = 4 + this.currentFloor;
+      p.takeDamage(dmg);
+      this.animations.flash('#7f1d1d', 0.5, 400);
+      this.addLog(`祭壇に祈った…が、神の怒りを感じる！ ${dmg}のダメージ！`, 'danger');
+      this.prayerTimeout = turn + 100;
+      return;
+    }
+    if (p.hp < p.maxHp / 7 || p.hunger <= 10) {
+      p.hp = p.maxHp;
+      if (p.hunger <= 10) p.hunger = p.maxHunger;
+      this.addLog('暖かい光に包まれた！ 体に力が戻ってくる。', 'heal');
+      this.prayerTimeout = turn + PRAYER_TIMEOUT;
+    } else {
+      for (const k of ['confused', 'poison', 'paralyzed', 'sleep']) p.statusEffects[k] = 0;
+      this.addLog('祭壇に祈った。安らかな気持ちになった。', 'normal');
+      this.prayerTimeout = turn + Math.floor(PRAYER_TIMEOUT / 2);
+    }
+  }
+
+  // (x, y) の近くにモンスターを呼び出す
+  summonNear(x, y, message, id = null) {
+    for (const dir of CONFIG.DIRECTIONS) {
+      const nx = x + dir.dx, ny = y + dir.dy;
+      if (!this.isTileFree(nx, ny)) continue;
+      const m = id ? Monster.createById(id, nx, ny) : Monster.spawnRandom(this.currentFloor, nx, ny);
+      m.isAlert = true;
+      this.monsters.push(m);
+      this.sound.playTrap();
+      this.animations.addBeam(x, y, nx, ny, '#a78bfa');
+      this.addLog(message, 'danger');
+      return m;
+    }
+    return null;
   }
 
   // モンスターへの攻撃処理
@@ -588,6 +806,7 @@ export class Game {
       const p = this.map.getRandomFloorTile(room);
       if (!p || !this.isTileFree(p.x, p.y)) continue;
       if (playerRoom && this.map.getRoomAt(p.x, p.y) === playerRoom) continue;
+      if (avoidPlayerRoom && Math.max(Math.abs(p.x - this.player.x), Math.abs(p.y - this.player.y)) < SPAWN_MIN_DIST) continue;
       return p;
     }
     return null;
@@ -730,7 +949,7 @@ export class Game {
       } else {
         // 部屋の入口に入った瞬間に停止
         const prevTile = this.map.getTile(this.player.x - this.dashDirection.dx, this.player.y - this.dashDirection.dy);
-        if (prevTile === CONFIG.TILES.CORRIDOR) {
+        if (prevTile !== CONFIG.TILES.FLOOR && prevTile !== CONFIG.TILES.STAIRS_DOWN) {
           this.stopDash();
           return;
         }
@@ -788,6 +1007,8 @@ export class Game {
     const playerFxActive = this.player.attackAnimTimer > 0 ||
       this.animations.projectiles.some(p => !p.isPickup) || this.animations.beams.length > 0;
     let fxOffset = playerFxActive ? PLAYER_TO_ENEMY_DELAY : 0;
+    // モンスターの経路探索用に、プレイヤーまでの歩数をターンごとに1回だけ計算する
+    this.distField = this.map.distanceField(this.player.x, this.player.y);
     try {
       for (const m of [...this.monsters]) {
         if (m.isDead() || !this.monsters.includes(m)) continue;
@@ -885,6 +1106,7 @@ export class Game {
     // 前の冒険の演出を片付ける
     fxClock.reset();
     this.animations = new AnimationEngine();
+    this.prayerTimeout = 0;
     this.pendingModal = null;
 
     const initialItems = [

@@ -257,6 +257,64 @@ export class SoundEngine {
     this.tone({ type: 'sine', f0: 140, f1: 60, dur: 0.12, vol: 0.3 });
   }
 
+  // 扉のきしみ（open=true で開く、false で閉じる）
+  playDoor(open = true) {
+    if (this.isMuted || !this.ctx) return;
+    this.ensureContext();
+    const v = this.vary(0.1);
+    this.noise({ dur: 0.35, vol: 0.12, filter: 'bandpass', f0: open ? 700 * v : 900 * v, f1: open ? 1100 : 500, q: 12 });
+    this.tone({ type: 'sawtooth', f0: 180 * v, f1: open ? 260 : 120, dur: 0.3, vol: 0.05 });
+    this.tone({ type: 'sine', f0: 90, f1: 60, dur: 0.12, vol: 0.25, delay: open ? 0.3 : 0 });
+  }
+
+  // 扉を蹴る
+  playKick() {
+    if (this.isMuted || !this.ctx) return;
+    this.ensureContext();
+    this.tone({ type: 'sine', f0: 110, f1: 40, dur: 0.2, vol: 0.6 });
+    this.noise({ dur: 0.12, vol: 0.35, filter: 'lowpass', f0: 1500, f1: 200 });
+  }
+
+  // 扉が砕ける
+  playDoorBreak() {
+    if (this.isMuted || !this.ctx) return;
+    this.ensureContext();
+    this.noise({ dur: 0.5, vol: 0.45, filter: 'lowpass', f0: 3000, f1: 150, delay: 0.05 });
+    for (let i = 0; i < 5; i++) {
+      this.tone({ type: 'triangle', f0: 300 + Math.random() * 400, f1: 120, dur: 0.08, vol: 0.12, delay: 0.08 + i * 0.05 });
+    }
+  }
+
+  // 水音（噴水・流し台）
+  playFountain() {
+    if (this.isMuted || !this.ctx) return;
+    this.ensureContext();
+    for (let i = 0; i < 7; i++) {
+      const f = 500 + Math.random() * 900;
+      this.tone({ type: 'sine', f0: f, f1: f * 1.8, dur: 0.07, vol: 0.08, delay: i * 0.06 + Math.random() * 0.03 });
+    }
+    this.noise({ dur: 0.5, vol: 0.06, filter: 'highpass', f0: 3000 });
+  }
+
+  // 土を掘る
+  playDig() {
+    if (this.isMuted || !this.ctx) return;
+    this.ensureContext();
+    for (let i = 0; i < 3; i++) {
+      this.noise({ dur: 0.12, vol: 0.3, filter: 'lowpass', f0: 900, f1: 200, delay: i * 0.18 });
+      this.tone({ type: 'sine', f0: 80, f1: 50, dur: 0.1, vol: 0.2, delay: i * 0.18 });
+    }
+  }
+
+  // 祈り（柔らかな和音）
+  playPray() {
+    if (this.isMuted || !this.ctx) return;
+    this.ensureContext();
+    for (const [f, d] of [[293.66, 0], [369.99, 0.15], [440, 0.3], [587.33, 0.45]]) {
+      this.tone({ type: 'sine', f0: f, dur: 1.6, vol: 0.08, delay: d, attack: 0.2 });
+    }
+  }
+
   // モンスターハウスの警報（不協和音のサイレン）
   playAlarm() {
     if (this.isMuted || !this.ctx) return;

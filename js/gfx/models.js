@@ -345,3 +345,98 @@ export function buildChest() {
   b.set(GOLD).push().translate(0, 0.27, 0.175).box(0.07, 0.09, 0.02).pop();
   return b.toArray();
 }
+
+// --- 扉と地形（NetHack の `+` `{` `_` `#` `|`） ---
+
+const STONE_LIGHT = { color: hexToRgb('#a89f8c'), rough: 0.85, metal: 0, emissive: 0, material: MAT.PLAIN };
+const STONE_DARK = { color: hexToRgb('#6f675a'), rough: 0.9, metal: 0, emissive: 0, material: MAT.PLAIN };
+const IRON = { color: hexToRgb('#3f444c'), rough: 0.45, metal: 0.9, emissive: 0, material: MAT.METAL };
+
+// 木の扉（蝶番を原点に +X 方向へ 0.86 の幅）
+export function buildDoorLeaf(locked = false) {
+  const b = new MeshBuilder();
+  const w = 0.86, h = 0.9;
+  for (let i = 0; i < 5; i++) {
+    const pw = w / 5;
+    const shade = 0.85 + (i % 2) * 0.12;
+    b.set({ ...WOOD, color: hexToRgb('#6b4426').map(c => c * shade) })
+      .push().translate(pw * (i + 0.5), h / 2, 0).box(pw - 0.008, h, 0.07).pop();
+  }
+  for (const y of [0.18, 0.72]) b.set(IRON).push().translate(w / 2, y, 0).box(w, 0.05, 0.085).pop();
+  // 取っ手の輪と錠前
+  b.set(IRON).push().translate(w - 0.13, 0.47, 0.05).rotate('x', Math.PI / 2).torus(0.045, 0.01, 12, 5).pop();
+  b.set(IRON).push().translate(w - 0.13, 0.47, -0.05).rotate('x', Math.PI / 2).torus(0.045, 0.01, 12, 5).pop();
+  if (locked) {
+    b.set({ ...GOLD, color: hexToRgb('#b08d3c') }).push().translate(w - 0.13, 0.36, 0.05).box(0.07, 0.09, 0.03).pop();
+    b.set({ ...GOLD, color: hexToRgb('#b08d3c') }).push().translate(w - 0.13, 0.36, -0.05).box(0.07, 0.09, 0.03).pop();
+  }
+  return b.toArray();
+}
+
+// 蹴破られた扉の残骸（床に散らばる板）
+export function buildBrokenDoor() {
+  const b = new MeshBuilder();
+  const planks = [[-0.25, 0.1, 0.4], [0.05, -0.15, -0.3], [0.25, 0.2, 1.2], [-0.05, 0.3, 2.0]];
+  for (const [x, z, r] of planks) {
+    b.set(WOOD).push().translate(x, 0.02, z).rotate('y', r).box(0.14, 0.035, 0.55).pop();
+  }
+  b.set(IRON).push().translate(0.1, 0.03, 0.05).rotate('y', 0.7).box(0.5, 0.02, 0.05).pop();
+  return b.toArray();
+}
+
+// 噴水 `{`：石の水盤と中央の柱、光る水面
+export function buildFountain() {
+  const b = new MeshBuilder();
+  b.set(STONE_LIGHT).push().cylinder(0.42, 0.44, 0.08, 20).pop();
+  b.set(STONE_LIGHT).push().translate(0, 0.08, 0).torus(0.38, 0.05, 24, 8).pop();
+  b.set(STONE_DARK).push().translate(0, 0.02, 0).cylinder(0.36, 0.36, 0.1, 20).pop();
+  b.set({ color: hexToRgb('#3b82f6'), rough: 0.05, metal: 0.3, emissive: 0.35, material: MAT.GLOW })
+    .push().translate(0, 0.1, 0).cylinder(0.35, 0.35, 0.02, 20).pop();
+  b.set(STONE_LIGHT).push().translate(0, 0.1, 0).cylinder(0.07, 0.06, 0.38, 12).pop();
+  b.set(STONE_LIGHT).push().translate(0, 0.48, 0).cylinder(0.08, 0.16, 0.08, 16).pop();
+  b.set({ color: hexToRgb('#60a5fa'), rough: 0.05, metal: 0.3, emissive: 0.6, material: MAT.GLOW })
+    .push().translate(0, 0.555, 0).cylinder(0.14, 0.14, 0.01, 16).pop();
+  return b.toArray();
+}
+
+// 祭壇 `_`：石の台と祭壇布、燭台
+export function buildAltar() {
+  const b = new MeshBuilder();
+  b.set(STONE_DARK).push().translate(0, 0.04, 0).box(0.8, 0.08, 0.55).pop();
+  b.set(STONE_LIGHT).push().translate(0, 0.28, 0).box(0.68, 0.42, 0.42).pop();
+  b.set(STONE_LIGHT).push().translate(0, 0.51, 0).box(0.76, 0.05, 0.5).pop();
+  b.set({ ...CRIMSON, color: hexToRgb('#6d1a36') }).push().translate(0, 0.54, 0).box(0.3, 0.012, 0.52).pop();
+  b.set({ ...CRIMSON, color: hexToRgb('#6d1a36') }).push().translate(0, 0.42, 0.255).box(0.3, 0.24, 0.012).pop();
+  b.set(GOLD).push().translate(0, 0.43, 0.263).rotate('z', Math.PI / 4).box(0.06, 0.06, 0.006).pop();
+  for (const x of [-0.28, 0.28]) {
+    b.set(GOLD).push().translate(x, 0.535, 0).cylinder(0.035, 0.02, 0.05, 10).pop();
+    b.set({ color: hexToRgb('#f3ead2'), rough: 0.6, metal: 0, emissive: 0.1, material: MAT.PLAIN })
+      .push().translate(x, 0.58, 0).cylinder(0.018, 0.018, 0.12, 8).pop();
+  }
+  return b.toArray();
+}
+
+// 流し台 `#`
+export function buildSink() {
+  const b = new MeshBuilder();
+  b.set(STONE_LIGHT).push().cylinder(0.08, 0.1, 0.45, 12).pop();
+  b.set({ color: hexToRgb('#d9dee5'), rough: 0.2, metal: 0.4, emissive: 0, material: MAT.PLAIN })
+    .push().translate(0, 0.5, 0).ellipsoid(0.26, 0.09, 0.2, 18, 8, 0.5, 1).pop();
+  b.set({ color: hexToRgb('#d9dee5'), rough: 0.2, metal: 0.4, emissive: 0, material: MAT.PLAIN })
+    .push().translate(0, 0.5, 0).torus(0.23, 0.025, 20, 6).pop();
+  b.set(STEEL).push().translate(0, 0.5, -0.17).cylinder(0.018, 0.018, 0.16, 8).pop();
+  b.set(STEEL).push().translate(0, 0.66, -0.17).rotate('x', Math.PI / 2).cylinder(0.016, 0.016, 0.12, 8).pop();
+  return b.toArray();
+}
+
+// 墓 `|`：墓石と盛り土
+export function buildGrave() {
+  const b = new MeshBuilder();
+  b.set({ color: hexToRgb('#4a3a28'), rough: 1, metal: 0, emissive: 0, material: MAT.PLAIN })
+    .push().translate(0, 0, 0.08).ellipsoid(0.28, 0.08, 0.38, 14, 8, 0, 0.5).pop();
+  b.set(STONE_DARK).push().translate(0, 0.28, -0.3).box(0.34, 0.5, 0.08).pop();
+  b.set(STONE_DARK).push().translate(0, 0.53, -0.3).rotate('x', Math.PI / 2).translate(0, -0.04, 0).cylinder(0.17, 0.17, 0.08, 16).pop();
+  b.set(STONE_LIGHT).push().translate(0, 0.38, -0.255).box(0.035, 0.22, 0.01).pop();
+  b.set(STONE_LIGHT).push().translate(0, 0.43, -0.255).box(0.14, 0.035, 0.01).pop();
+  return b.toArray();
+}

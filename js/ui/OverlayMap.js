@@ -3,6 +3,16 @@
  * コントローラーのL1/Select/Mキー/ボタンで【全画面透過 / ミニマップ / 非表示】をワンタッチ切替
  */
 import { CONFIG } from '../config.js?v=20260925_01';
+import { MONSTER_GLYPHS } from '../gfx/glyphs.js?v=20260925_01';
+
+// アイテムの分類記号（NetHack）
+const ITEM_CLASS_GLYPHS = {
+  weapon: ')', shield: '[', food: '%', herb: '!', scroll: '?', staff: '/', arrow: ')', gold: '$',
+};
+// 地形の記号と色
+const FEATURE_GLYPHS = {
+  fountain: ['{', '#60a5fa'], sink: ['#', '#cbd5e1'], altar: ['_', '#e5e7eb'], grave: ['|', '#e5e7eb'],
+};
 
 export const MAP_MODES = {
   FULL_OVERLAY: 'full_overlay', // SFCシレン風 画面中央の半透明大マップ
@@ -19,8 +29,6 @@ const FULL_MAP_STYLE = {
   FRAME_PADDING: 8,
   MAX_CELL: 16,
   MIN_CELL: 3,
-  FLOOR_COLOR: 'rgba(100, 116, 139, 0.85)',
-  CORRIDOR_COLOR: 'rgba(148, 163, 184, 0.9)',
 };
 
 export class OverlayMap {
@@ -92,77 +100,126 @@ export class OverlayMap {
     ctx.fillStyle = 'rgba(56, 189, 248, 0.9)';
     ctx.fillText(`地下 ${game.currentFloor} 階 MAP  [M / 地図] で切替`, startX - pad, startY - pad - 6);
 
-    // 探索済みタイルの描画
+    // NetHack 風の文字で描く（探索済みの場所だけ。今見えている場所は明るく）
+    const font = `${Math.max(8, Math.round(cellSize * 1.15))}px "DejaVu Sans Mono", Menlo, Consolas, monospace`;
+    ctx.font = font;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const put = (x, y, ch, color, glow = false) => {
+      const px = startX + x * cellSize + cellSize / 2;
+      const py = startY + y * cellSize + cellSize / 2;
+      ctx.shadowBlur = glow ? 8 : 0;
+      ctx.shadowColor = color;
+      ctx.fillStyle = color;
+      ctx.fillText(ch, px, py);
+    };
     for (let y = 0; y < map.height; y++) {
       for (let x = 0; x < map.width; x++) {
         if (!map.visited[y][x]) continue;
-
-        const tile = map.getTile(x, y);
-        const px = startX + x * cellSize;
-        const py = startY + y * cellSize;
-
-        if (tile === CONFIG.TILES.FLOOR) {
-          ctx.fillStyle = style.FLOOR_COLOR;
-          ctx.fillRect(px, py, cellSize, cellSize);
-        } else if (tile === CONFIG.TILES.CORRIDOR) {
-          ctx.fillStyle = style.CORRIDOR_COLOR;
-          ctx.fillRect(px + 1, py + 1, cellSize - 2, cellSize - 2);
-        } else if (tile === CONFIG.TILES.STAIRS_DOWN) {
-          ctx.fillStyle = '#38bdf8';
-          ctx.fillRect(px, py, cellSize, cellSize);
-        }
+        const [ch, color] = this.tileGlyph(map, x, y);
+        if (!ch) continue;
+        put(x, y, ch, map.visible[y][x] ? color : this.dim(color));
       }
     }
 
-    // 階段の強調（探索済みなら点滅）
-    if (map.stairs && map.visited[map.stairs.y][map.stairs.x]) {
-      const spx = startX + map.stairs.x * cellSize;
-      const spy = startY + map.stairs.y * cellSize;
-      ctx.fillStyle = '#38bdf8';
-      ctx.shadowColor = '#38bdf8';
-      ctx.shadowBlur = 8;
-      ctx.fillRect(spx, spy, cellSize, cellSize);
+    // 見つけた罠
+    for (const t of map.traps) {
+      if (t.isRevealed && map.visited[t.y][t.x]) put(t.x, t.y, '^', t.type.color || '#f472b6');
     }
 
-    // アイテム（視界内、またはあかりの巻物効果中：黄色い点）
+    // アイテム（NetHack の分類記号）
     for (const item of game.droppedItems) {
-      if (map.visited[item.y][item.x]) {
-        const ipx = startX + item.x * cellSize;
-        const ipy = startY + item.y * cellSize;
-        ctx.fillStyle = '#f59e0b';
-        ctx.shadowColor = '#f59e0b';
-        ctx.shadowBlur = 6;
-        ctx.beginPath();
-        ctx.arc(ipx + cellSize / 2, ipy + cellSize / 2, Math.max(2, cellSize * 0.35), 0, Math.PI * 2);
-        ctx.fill();
-      }
+      if (map.visited[item.y][item.x]) put(item.x, item.y, ITEM_CLASS_GLYPHS[item.type] || '*', item.color || '#fbbf24');
     }
 
-    // モンスター（視界内：赤い点）
+    // 見えているモンスター（クラス文字）
     for (const m of game.monsters) {
-      if (map.visible[m.y][m.x]) {
-        const mpx = startX + m.x * cellSize;
-        const mpy = startY + m.y * cellSize;
-        ctx.fillStyle = '#ef4444';
-        ctx.shadowColor = '#ef4444';
-        ctx.shadowBlur = 6;
-        ctx.beginPath();
-        ctx.arc(mpx + cellSize / 2, mpy + cellSize / 2, Math.max(2.5, cellSize * 0.4), 0, Math.PI * 2);
-        ctx.fill();
-      }
+      if (!map.visible[m.y][m.x]) continue;
+      put(m.x, m.y, m.isMimic ? ']' : (MONSTER_GLYPHS[m.defId] || '?'), m.color, true);
     }
 
-    // プレイヤー（点滅する明るいシアンの点）
-    const ppx = startX + player.x * cellSize;
-    const ppy = startY + player.y * cellSize;
-    ctx.fillStyle = '#ffffff';
-    ctx.shadowColor = '#38bdf8';
-    ctx.shadowBlur = 10;
-    ctx.beginPath();
-    ctx.arc(ppx + cellSize / 2, ppy + cellSize / 2, Math.max(3, cellSize * 0.45), 0, Math.PI * 2);
-    ctx.fill();
+    // プレイヤー
+    put(player.x, player.y, '@', '#ffffff', true);
 
     ctx.restore();
+  }
+
+  // マスの記号と色（壁は上下に床があれば '-'、左右なら '|'）
+  tileGlyph(map, x, y) {
+    const T = CONFIG.TILES;
+    const tile = map.getTile(x, y);
+    const feat = map.getFeature(x, y);
+    if (feat) return FEATURE_GLYPHS[feat.type];
+    if (map.stairs && map.stairs.x === x && map.stairs.y === y) return ['>', '#fde047'];
+    if (tile === T.FLOOR) return ['.', '#94a3b8'];
+    if (tile === T.CORRIDOR) return ['#', '#8b8b8b'];
+    if (tile === T.DOOR) {
+      const d = map.getDoor(x, y);
+      const state = d ? d.state : 'none';
+      if (state === 'closed' || state === 'locked') return ['+', '#d97706'];
+      if (state === 'open') {
+        const ns = map.getTile(x - 1, y) === T.WALL && map.getTile(x + 1, y) === T.WALL;
+        return [ns ? '|' : '-', '#d97706'];
+      }
+      return ['.', '#d97706'];
+    }
+    // 壁：部屋（洞窟・迷路では床）に接しているものだけ。NetHack と同じく通路の周りには壁を描かない
+    const open = (xx, yy) => {
+      const t = map.getTile(xx, yy);
+      return t === T.FLOOR || t === T.DOOR || t === T.STAIRS_DOWN;
+    };
+    if (open(x, y - 1) || open(x, y + 1)) return ['-', '#a1a1aa'];
+    if (open(x - 1, y) || open(x + 1, y)) return ['|', '#a1a1aa'];
+    for (const [dx, dy] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) {
+      if (open(x + dx, y + dy)) return ['-', '#a1a1aa'];
+    }
+    return [null, null];
+  }
+
+  // 今は見えていない場所の色（暗く青みがかる）
+  dim(hex) {
+    const n = parseInt(hex.slice(1), 16);
+    const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+    return `rgb(${Math.round(r * 0.45)}, ${Math.round(g * 0.48)}, ${Math.round(b * 0.6)})`;
+  }
+
+  // マスの記号と色（壁は上下に床があれば '-'、左右なら '|'）
+  tileGlyph(map, x, y) {
+    const T = CONFIG.TILES;
+    const tile = map.getTile(x, y);
+    const feat = map.getFeature(x, y);
+    if (feat) return FEATURE_GLYPHS[feat.type];
+    if (map.stairs && map.stairs.x === x && map.stairs.y === y) return ['>', '#fde047'];
+    if (tile === T.FLOOR) return ['.', '#94a3b8'];
+    if (tile === T.CORRIDOR) return ['#', '#8b8b8b'];
+    if (tile === T.DOOR) {
+      const d = map.getDoor(x, y);
+      const state = d ? d.state : 'none';
+      if (state === 'closed' || state === 'locked') return ['+', '#d97706'];
+      if (state === 'open') {
+        const ns = map.getTile(x - 1, y) === T.WALL && map.getTile(x + 1, y) === T.WALL;
+        return [ns ? '|' : '-', '#d97706'];
+      }
+      return ['.', '#d97706'];
+    }
+    // 壁：部屋（洞窟・迷路では床）に接しているものだけ。NetHack と同じく通路の周りには壁を描かない
+    const open = (xx, yy) => {
+      const t = map.getTile(xx, yy);
+      return t === T.FLOOR || t === T.DOOR || t === T.STAIRS_DOWN;
+    };
+    if (open(x, y - 1) || open(x, y + 1)) return ['-', '#a1a1aa'];
+    if (open(x - 1, y) || open(x + 1, y)) return ['|', '#a1a1aa'];
+    for (const [dx, dy] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) {
+      if (open(x + dx, y + dy)) return ['-', '#a1a1aa'];
+    }
+    return [null, null];
+  }
+
+  // 今は見えていない場所の色（暗く青みがかる）
+  dim(hex) {
+    const n = parseInt(hex.slice(1), 16);
+    const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+    return `rgb(${Math.round(r * 0.45)}, ${Math.round(g * 0.48)}, ${Math.round(b * 0.6)})`;
   }
 
   // 画面右上の小型ミニマップ
@@ -198,6 +255,9 @@ export class OverlayMap {
 
         if (tile === CONFIG.TILES.FLOOR || tile === CONFIG.TILES.CORRIDOR) {
           ctx.fillStyle = 'rgba(148, 163, 184, 0.5)';
+          ctx.fillRect(px, py, cellSize, cellSize);
+        } else if (tile === CONFIG.TILES.DOOR) {
+          ctx.fillStyle = 'rgba(217, 119, 6, 0.85)';
           ctx.fillRect(px, py, cellSize, cellSize);
         } else if (tile === CONFIG.TILES.STAIRS_DOWN) {
           ctx.fillStyle = '#38bdf8';
