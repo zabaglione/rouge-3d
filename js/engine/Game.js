@@ -1,23 +1,23 @@
 /**
  * ゲームステート・ターン管理・統合ゲームエンジン
  */
-import { CONFIG } from '../config.js?v=20260925_05';
-import { sound } from './Audio.js?v=20260925_05';
-import { InputManager } from './Input.js?v=20260925_05';
-import { AnimationEngine } from './Animation.js?v=20260925_05';
-import { fxClock } from './FxClock.js?v=20260925_05';
-import { DungeonGenerator, MAZE_CONTENTS } from '../dungeon/DungeonGen.js?v=20260925_05';
-import { DungeonMap } from '../dungeon/Map.js?v=20260925_05';
-import { Player } from '../entities/Player.js?v=20260925_05';
-import { Monster } from '../entities/Monster.js?v=20260925_05';
-import { Item, ITEM_TYPES } from '../items/Item.js?v=20260925_05';
-import { Inventory } from '../items/Inventory.js?v=20260925_05';
-import { ItemEffectHandler } from '../items/ItemEffects.js?v=20260925_05';
-import { HUD } from '../ui/HUD.js?v=20260925_05';
-import { InventoryUI } from '../ui/InventoryUI.js?v=20260925_05';
-import { OverlayMap } from '../ui/OverlayMap.js?v=20260925_05';
-import { VirtualPad } from '../ui/VirtualPad.js?v=20260925_05';
-import { MONSTER_GLYPHS } from '../gfx/glyphs.js?v=20260925_05';
+import { CONFIG } from '../config.js?v=20260925_06';
+import { sound } from './Audio.js?v=20260925_06';
+import { InputManager } from './Input.js?v=20260925_06';
+import { AnimationEngine } from './Animation.js?v=20260925_06';
+import { fxClock } from './FxClock.js?v=20260925_06';
+import { DungeonGenerator, MAZE_CONTENTS } from '../dungeon/DungeonGen.js?v=20260925_06';
+import { DungeonMap } from '../dungeon/Map.js?v=20260925_06';
+import { Player } from '../entities/Player.js?v=20260925_06';
+import { Monster } from '../entities/Monster.js?v=20260925_06';
+import { Item, ITEM_TYPES } from '../items/Item.js?v=20260925_06';
+import { Inventory } from '../items/Inventory.js?v=20260925_06';
+import { ItemEffectHandler } from '../items/ItemEffects.js?v=20260925_06';
+import { HUD } from '../ui/HUD.js?v=20260925_06';
+import { InventoryUI } from '../ui/InventoryUI.js?v=20260925_06';
+import { OverlayMap } from '../ui/OverlayMap.js?v=20260925_06';
+import { VirtualPad } from '../ui/VirtualPad.js?v=20260925_06';
+import { MONSTER_GLYPHS } from '../gfx/glyphs.js?v=20260925_06';
 
 // アイテムが既存アイテムと重ならないよう転がる最大距離（マス）
 const ITEM_SCATTER_RADIUS = 3;
@@ -287,6 +287,21 @@ export class Game {
     this.track = this.track || [];
     this.track.push({ x, y });
     if (this.track.length > PLAYER_TRACK_SIZE) this.track.shift();
+  }
+
+  // プレイヤーがワープした：足跡が途切れ、新しい位置が見えていない敵はこちらを見失う
+  onPlayerTeleported() {
+    this.track = [];
+    const p = this.player;
+    for (const m of this.monsters) {
+      const dist = Math.max(Math.abs(m.x - p.x), Math.abs(m.y - p.y));
+      const seesPlayer = this.map.visible[m.y] && this.map.visible[m.y][m.x] &&
+        dist <= 7 && this.map.hasLineOfSight(m.x, m.y, p.x, p.y);
+      if (!seesPlayer) {
+        m.isAlert = false;
+        m.mtrack = [];
+      }
+    }
   }
 
   // (x, y) の隣にある最も新しい足跡（NetHack の gettrack。足跡の上にいる場合は無し）

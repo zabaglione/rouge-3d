@@ -2,7 +2,7 @@
  * Web Audio API によるプロシージャル効果音（外部アセット不要）
  * 石造りのダンジョンらしい残響（生成したインパルス応答による畳み込み）を全SEにかける
  */
-import { fxClock } from './FxClock.js?v=20260925_05';
+import { fxClock } from './FxClock.js?v=20260925_06';
 
 // 同じ音の繰り返しで単調にならないよう、鳴らすたびにピッチを揺らす幅（±割合）
 const PITCH_VARIANCE = 0.06;
