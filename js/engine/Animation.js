@@ -6,8 +6,8 @@
  * 描画は Renderer3D がこのデータを読んで行う。
  * 座標はタイル単位で受け取り、ワールド座標（タイル中心 = gx + 0.5, gy + 0.5）に変換して保持する。
  */
-import { fxClock } from './FxClock.js?v=20260925_01';
-import { hexToRgb } from '../gfx/math.js?v=20260925_01';
+import { fxClock } from './FxClock.js?v=20260925_06';
+import { hexToRgb } from '../gfx/math.js?v=20260925_06';
 
 // 画面揺れ（トラウマ値）の減衰と、カメラの反動・寄りが戻る速さ（1秒あたり）
 const SHAKE_DECAY_PER_SEC = 2.0;
@@ -47,7 +47,7 @@ const rgb = (c) => (typeof c === 'string' ? hexToRgb(c) : c);
 // 演出の順番待ち（敵の反撃など）に合わせて遅らせて出すエフェクト
 const DEFERRABLE_METHODS = [
   'addDamageNumber', 'addSlash', 'addProjectile', 'addBeam', 'addLevelUp', 'addExplosion',
-  'addHitSpark', 'addDeath', 'addPickup', 'addFloatingText', 'addLight', 'shake', 'kick', 'zoomPunch',
+  'addHitSpark', 'addDeath', 'addPickup', 'addExplosionDust', 'addFloatingText', 'addLight', 'shake', 'kick', 'zoomPunch',
   'flash', 'hurt', 'vibrate', 'focus', 'slowMo', 'aberration',
 ];
 
@@ -275,6 +275,26 @@ export class AnimationEngine {
         kind: FX.DUST, x: x + (Math.random() - 0.5) * 0.3, y: 0.05, z: z + (Math.random() - 0.5) * 0.3,
         vx: (Math.random() - 0.5) * 0.4, vy: 0.3 + Math.random() * 0.3, vz: (Math.random() - 0.5) * 0.4,
         drag: 0.95, size: 0.08, grow: 0.25, color: [0.22, 0.19, 0.15], life: 500,
+      });
+    }
+  }
+
+  // 扉を蹴破った：木片と土煙
+  addExplosionDust(gridX, gridY) {
+    const x = wx(gridX), z = wz(gridY);
+    for (let i = 0; i < 26; i++) {
+      const a = Math.random() * Math.PI * 2;
+      this.emit({
+        kind: FX.CHUNK, x, y: 0.5 + Math.random() * 0.4, z,
+        vx: Math.cos(a) * 3, vy: 1 + Math.random() * 3, vz: Math.sin(a) * 3, gravity: 10, drag: 0.96,
+        size: 0.03 + Math.random() * 0.03, color: [0.5, 0.3, 0.15], life: 900, spin: 10, bounce: true,
+      });
+    }
+    for (let i = 0; i < 8; i++) {
+      this.emit({
+        kind: FX.DUST, x: x + (Math.random() - 0.5) * 0.6, y: 0.2, z: z + (Math.random() - 0.5) * 0.6,
+        vx: (Math.random() - 0.5), vy: 0.5, vz: (Math.random() - 0.5), drag: 0.94, size: 0.2, grow: 0.6,
+        color: [0.25, 0.2, 0.15], life: 900,
       });
     }
   }

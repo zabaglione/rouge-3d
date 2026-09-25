@@ -1,9 +1,9 @@
 /**
  * アイテム使用・読解・振下・投擲時の効果ロジック
  */
-import { ITEM_TYPES, Item } from './Item.js?v=20260925_01';
-import { fxClock } from '../engine/FxClock.js?v=20260925_01';
-import { projectileFlightMs } from '../engine/Animation.js?v=20260925_01';
+import { ITEM_TYPES, Item } from './Item.js?v=20260925_06';
+import { fxClock } from '../engine/FxClock.js?v=20260925_06';
+import { projectileFlightMs } from '../engine/Animation.js?v=20260925_06';
 
 // 衝撃波の杖：吹き飛ばす最大距離と激突ダメージ
 const KNOCKBACK_DISTANCE = 10;
@@ -12,6 +12,12 @@ const KNOCKBACK_DAMAGE = 5;
 export class ItemEffectHandler {
   constructor(game) {
     this.game = game;
+  }
+
+  // 巻物の効果範囲：同じ部屋、部屋の外（通路・洞窟・迷路）なら周囲6マス
+  inSameArea(room, player, m) {
+    if (room) return this.game.map.getRoomAt(m.x, m.y) === room;
+    return Math.max(Math.abs(m.x - player.x), Math.abs(m.y - player.y)) <= 6;
   }
 
   // 「食べる」
@@ -79,12 +85,19 @@ export class ItemEffectHandler {
           this.game.map.visited[y][x] = true;
         }
       }
+      // 暗い部屋にいれば、その部屋に明かりが灯る（NetHack と同じ）
+      const litRoom = this.game.map.getRoomAt(player.x, player.y);
+      if (litRoom && litRoom.lit === false) {
+        litRoom.lit = true;
+        this.game.map.revision++; // 松明を灯した地形に作り直す
+        this.game.updateVisibility();
+      }
       this.game.addLog(`${item.name}を読んだ！ フロア全体が眩い光で照らし出された！`, 'accent');
     } else if (item.id === 'scr_confusion') {
       const room = this.game.map.getRoomAt(player.x, player.y);
       let count = 0;
       for (const m of this.game.monsters) {
-        if (!room || this.game.map.getRoomAt(m.x, m.y) === room) {
+        if (this.inSameArea(room, player, m)) {
           m.statusEffects.confused = 8;
           count++;
         }
@@ -93,7 +106,7 @@ export class ItemEffectHandler {
     } else if (item.id === 'scr_sleep') {
       const room = this.game.map.getRoomAt(player.x, player.y);
       for (const m of this.game.monsters) {
-        if (!room || this.game.map.getRoomAt(m.x, m.y) === room) {
+        if (this.inSameArea(room, player, m)) {
           m.statusEffects.sleep = 10;
         }
       }
@@ -103,6 +116,7 @@ export class ItemEffectHandler {
       if (p) {
         player.warpTo(p.x, p.y);
         this.game.updateVisibility();
+        this.game.onPlayerTeleported();
         this.game.addLog(`${item.name}を読んだ！ 風に包まれ、フロアの別の場所へ転移した！`, 'accent');
       }
     } else if (item.id === 'scr_upgrade') {

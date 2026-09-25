@@ -2,9 +2,9 @@
  * ダンジョンのマップから 3D の地形（床・壁・階段・装飾）と光源を組み立てる
  * 座標：タイル (gx, gy) の中心 = ワールド (gx + 0.5, 0, gy + 0.5)。Y が上
  */
-import { MeshBuilder, MAT } from './geometry.js?v=20260925_01';
-import { hexToRgb } from './math.js?v=20260925_01';
-import { CONFIG } from '../config.js?v=20260925_01';
+import { MeshBuilder, MAT } from './geometry.js?v=20260925_06';
+import { hexToRgb } from './math.js?v=20260925_06';
+import { CONFIG } from '../config.js?v=20260925_06';
 
 export const WALL_H = 1.25;
 
@@ -12,6 +12,11 @@ const FLOOR_COLOR = hexToRgb('#8a826f');
 const CORRIDOR_COLOR = hexToRgb('#7a6d5c');
 const WALL_COLOR = hexToRgb('#8b8374');
 const TOP_COLOR = hexToRgb('#2b2824');
+const CAVE_FLOOR = hexToRgb('#6e6150');
+const CAVE_WALL = hexToRgb('#7a6a58');
+const DOOR_FRAME_COLOR = hexToRgb('#a0957f');
+// 扉の開口部の高さ
+export const DOOR_H = 0.95;
 
 // タイルごとの決まった乱数
 function tileRand(x, y, seed = 0) {
@@ -23,7 +28,9 @@ export function buildWorld(map) {
   const b = new MeshBuilder();
   const T = CONFIG.TILES;
   const W = map.width, H = map.height;
-  const walk = (x, y) => map.isWalkable(x, y);
+  // 床として作るマス（壁以外。閉じた扉のマスも床を張る）
+  const walk = (x, y) => map.getTile(x, y) !== T.WALL;
+  const cave = map.style === 'mines';
   const isStairs = (x, y) => map.stairs && map.stairs.x === x && map.stairs.y === y;
   // 壁として立体化するマス（歩けるマスに接している壁）
   const built = (x, y) => {
@@ -44,10 +51,10 @@ export function buildWorld(map) {
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
       if (!walk(x, y) || isStairs(x, y)) continue;
-      const inRoom = !!map.getRoomAt(x, y);
+      const inRoom = !!map.getRoomAt(x, y) || map.getTile(x, y) === T.DOOR;
       b.set({
-        color: inRoom ? FLOOR_COLOR : CORRIDOR_COLOR, rough: 0.9, metal: 0, emissive: 0,
-        material: inRoom ? MAT.FLAGSTONE : MAT.COBBLE, ao: 1,
+        color: cave ? CAVE_FLOOR : (inRoom ? FLOOR_COLOR : CORRIDOR_COLOR), rough: 0.9, metal: 0, emissive: 0,
+        material: cave ? MAT.ROCK : (inRoom ? MAT.FLAGSTONE : MAT.COBBLE), ao: 1,
       });
       // 壁際の四隅を暗くする（頂点 AO）
       const ao = (cx, cy) => {
@@ -97,6 +104,24 @@ export function buildWorld(map) {
       const faces = {
         px: walk(x + 1, y), nx: walk(x - 1, y), pz: walk(x, y + 1), nz: walk(x, y - 1), py: 0, ny: 0,
       };
+      // 部屋を囲む壁は石積み、通路を掘った周りは素掘りの岩肌
+      let masonry = false;
+      for (let dy = -1; dy <= 1 && !masonry; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const t = map.getTile(x + dx, y + dy);
+          if ((t === T.FLOOR && map.getRoomAt(x + dx, y + dy)) || t === T.DOOR) { masonry = true; break; }
+        }
+      }
+      if (map.style === 'maze') masonry = true;
+      if (!masonry) {
+        // 岩肌：高さを不揃いにして坑道らしく
+        const hh = WALL_H * (cave ? 0.75 + tileRand(x, y, 11) * 0.8 : 0.95 + tileRand(x, y, 11) * 0.25);
+        b.set({ color: CAVE_WALL.map(c => c * (0.85 + tileRand(x, y, 12) * 0.3)), rough: 0.9, metal: 0, emissive: 0, material: MAT.ROCK, ao: 1 });
+        b.push().translate(cx, hh / 2, cz).box(1, hh, 1, faces).pop();
+        b.set({ color: TOP_COLOR, rough: 0.95, metal: 0, emissive: 0, material: MAT.WALLTOP, ao: 1 });
+        b.push().translate(cx, hh, cz).box(1, 0.001, 1, { py: 1 }).pop();
+        continue;
+      }
       b.set({ color: WALL_COLOR, rough: 0.9, metal: 0, emissive: 0, material: MAT.BRICK, ao: 1 });
       b.push().translate(cx, WALL_H / 2, cz).box(1, WALL_H, 1, faces).pop();
       // 天面
@@ -116,14 +141,56 @@ export function buildWorld(map) {
     }
   }
 
+  // --- 洞窟の石筍・落石（壁際に寄せて置く。通行の邪魔にはならない飾り） ---
+  if (cave) {
+    for (let y = 1; y < H - 1; y++) {
+      for (let x = 1; x < W - 1; x++) {
+        if (map.getTile(x, y) !== T.FLOOR || isStairs(x, y)) continue;
+        const t = tileRand(x, y, 21);
+        if (t > 0.9) buildRubble(b, x + 0.5, y + 0.5, x * 13 + y);
+        else if (t > 0.86) {
+          // 壁の方向へ寄せた石筍
+          let ox = 0, oz = 0;
+          if (map.getTile(x - 1, y) === T.WALL) ox = -0.35; else if (map.getTile(x + 1, y) === T.WALL) ox = 0.35;
+          if (map.getTile(x, y - 1) === T.WALL) oz = -0.35; else if (map.getTile(x, y + 1) === T.WALL) oz = 0.35;
+          if (!ox && !oz) continue;
+          const h = 0.25 + tileRand(x, y, 22) * 0.45;
+          b.set({ color: CAVE_WALL, rough: 0.9, metal: 0, emissive: 0, material: MAT.ROCK, ao: 1 })
+            .push().translate(x + 0.5 + ox, 0, y + 0.5 + oz).cylinder(0.12, 0.01, h, 7).pop();
+        }
+      }
+    }
+  }
+
+  // --- 扉の枠：開口部の上のまぐさ石と、両脇の石の柱 ---
+  for (const door of map.doors.values()) {
+    const { x, y } = door;
+    const cx = x + 0.5, cz = y + 0.5;
+    // 左右が壁なら南北に抜ける出入口（扉は東西方向に広がる）
+    const ns = map.getTile(x - 1, y) === T.WALL && map.getTile(x + 1, y) === T.WALL;
+    b.set({ color: WALL_COLOR, rough: 0.9, metal: 0, emissive: 0, material: MAT.BRICK, ao: 1 });
+    b.push().translate(cx, (DOOR_H + WALL_H) / 2, cz).box(ns ? 1 : 0.9, WALL_H - DOOR_H, ns ? 0.9 : 1).pop();
+    b.set({ color: TOP_COLOR, rough: 0.95, metal: 0, emissive: 0, material: MAT.WALLTOP, ao: 1 });
+    b.push().translate(cx, WALL_H, cz).box(1, 0.001, 1, { py: 1 }).pop();
+    b.set({ color: DOOR_FRAME_COLOR, rough: 0.85, metal: 0, emissive: 0, material: MAT.PLAIN, ao: 1 });
+    for (const s of [-1, 1]) {
+      b.push().translate(cx + (ns ? s * 0.45 : 0), DOOR_H / 2, cz + (ns ? 0 : s * 0.45)).box(ns ? 0.1 : 0.16, DOOR_H, ns ? 0.16 : 0.1).pop();
+    }
+    b.push().translate(cx, DOOR_H + 0.04, cz).box(ns ? 1.0 : 0.2, 0.1, ns ? 0.2 : 1.0).pop();
+    // 敷居
+    b.set({ color: DOOR_FRAME_COLOR.map(c => c * 0.8), rough: 0.9, metal: 0, emissive: 0, material: MAT.PLAIN, ao: 1 });
+    b.push().translate(cx, 0.015, cz).box(ns ? 0.9 : 0.25, 0.03, ns ? 0.25 : 0.9).pop();
+  }
+
   // --- 部屋の装飾：北側の壁の松明・旗、角の柱、床の瓦礫や骨 ---
   for (const r of map.rooms) {
     const wallY = r.y - 1;
-    // 松明（北の壁に3〜4マスおき）
+    // 松明（北の壁に3〜4マスおき）。暗い部屋は火が消えている
     for (let x = r.x + 1; x < r.x + r.w - 1; x += 3) {
       if (map.getTile(x, wallY) !== T.WALL) continue;
       const tx = x + 0.5, tz = r.y + 0.02;
-      buildSconce(b, tx, 0.82, tz);
+      buildSconce(b, tx, 0.82, tz, r.lit !== false);
+      if (r.lit === false) continue;
       flames.push({ x: tx, y: 1.02, z: tz + 0.1 });
       lights.push({ x: tx, y: 1.0, z: tz + 0.35, color: hexToRgb('#ff9a3c'), radius: 5, intensity: 0.95, flicker: 0.35, seed: x * 7 + r.y });
     }
@@ -153,14 +220,20 @@ export function buildWorld(map) {
   return { vertices: b.toArray(), lights, flames };
 }
 
-function buildSconce(b, x, y, z) {
+function buildSconce(b, x, y, z, lit = true) {
   const iron = { color: hexToRgb('#3b3f46'), rough: 0.4, metal: 1, emissive: 0, material: MAT.METAL, ao: 1 };
   b.set(iron).push().translate(x, y, z + 0.02).box(0.12, 0.2, 0.04).pop();
   b.set(iron).push().translate(x, y + 0.05, z + 0.08).rotate('x', 0.5).box(0.035, 0.035, 0.16).pop();
   b.set({ color: hexToRgb('#4a2e1a'), rough: 0.8, metal: 0, emissive: 0, material: MAT.WOOD, ao: 1 })
     .push().translate(x, y + 0.03, z + 0.12).rotate('x', 0.25).cylinder(0.025, 0.035, 0.18, 8).pop();
-  b.set({ color: hexToRgb('#ff8c2a'), rough: 0.5, metal: 0, emissive: 2.5, material: MAT.GLOW, ao: 1 })
-    .push().translate(x, y + 0.2, z + 0.1).sphere(0.04, 8, 6).pop();
+  if (lit) {
+    b.set({ color: hexToRgb('#ff8c2a'), rough: 0.5, metal: 0, emissive: 2.5, material: MAT.GLOW, ao: 1 })
+      .push().translate(x, y + 0.2, z + 0.1).sphere(0.04, 8, 6).pop();
+  } else {
+    // 燃え尽きた松明の炭
+    b.set({ color: [0.05, 0.04, 0.04], rough: 1, metal: 0, emissive: 0, material: MAT.PLAIN, ao: 1 })
+      .push().translate(x, y + 0.2, z + 0.1).sphere(0.035, 8, 6).pop();
+  }
 }
 
 function buildBanner(b, x, z, hex) {

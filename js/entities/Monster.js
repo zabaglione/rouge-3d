@@ -1,11 +1,11 @@
 /**
  * モンスターの定義、出現テーブル、AI行動ロジック（全24種・オリジナルローグ級）
  */
-import { Entity } from './Entity.js?v=20260925_01';
-import { CONFIG } from '../config.js?v=20260925_01';
-import { Item } from '../items/Item.js?v=20260925_01';
-import { fxClock } from '../engine/FxClock.js?v=20260925_01';
-import { projectileFlightMs } from '../engine/Animation.js?v=20260925_01';
+import { Entity } from './Entity.js?v=20260925_06';
+import { CONFIG } from '../config.js?v=20260925_06';
+import { Item } from '../items/Item.js?v=20260925_06';
+import { fxClock } from '../engine/FxClock.js?v=20260925_06';
+import { projectileFlightMs } from '../engine/Animation.js?v=20260925_06';
 
 export const MONSTER_DEFINITIONS = [
   // --- 浅層 (B1〜B4) ---
@@ -370,7 +370,26 @@ export const MONSTER_DEFINITIONS = [
     maxFloor: 20,
     desc: '最深層の冥府を統べる大悪魔。倍速行動と瞬間転移奇襲で冒険者を粉砕する。',
   },
+  {
+    id: 'minotaur',
+    name: 'ミノタウロス',
+    icon: '🐂',
+    color: '#a16207',
+    hp: 110,
+    atk: 30,
+    def: 14,
+    exp: 280,
+    speed: 1,
+    minFloor: 99, // 通常は出現しない（迷路の階にだけ置かれる）
+    maxFloor: 99,
+    desc: '迷路の奥をさまよう牛頭の巨人。迷い込んだ者を角と拳で叩き潰す。',
+  },
 ];
+
+// 目がなく、足跡をたどれない敵（NetHack のプディング類）
+const NO_EYES = ['slime'];
+// 敵が覚えている自分の直近の位置の数（NetHack の MTSZ）
+const MONSTER_TRACK_SIZE = 4;
 
 export class Monster extends Entity {
   constructor(def, x, y) {
@@ -450,7 +469,7 @@ export class Monster extends Entity {
     // 視界・認識チェック
     const myRoom = game.map.getRoomAt(this.x, this.y);
     const playerRoom = game.map.getRoomAt(player.x, player.y);
-    const inSameRoom = myRoom && playerRoom && myRoom === playerRoom;
+    const inSameRoom = myRoom && playerRoom && myRoom === playerRoom && myRoom.lit !== false;
     const hasLOS = game.map.hasLineOfSight(this.x, this.y, player.x, player.y);
 
     if (inSameRoom || (hasLOS && dist <= 7)) {
@@ -737,6 +756,12 @@ export class Monster extends Entity {
 
   // プレイヤー追跡（最短経路または障害物迂回）
   chasePlayer(player, game) {
+    // NetHack の m_move：目標（プレイヤー、見えなければその足跡）へ一番近づくマスを選ぶ
+    if (!this.canPassWalls) {
+      this.netHackMove(player, game);
+      return;
+    }
+
     const dx = player.x - this.x;
     const dy = player.y - this.y;
 
@@ -779,6 +804,54 @@ export class Monster extends Entity {
 
     // 候補が全て塞がれていた場合はランダム徘徊
     this.wander(game);
+  }
+
+  // NetHack の m_move を簡略化した移動
+  //   - 目標はプレイヤーの位置。姿が見えないときは、目のある敵ならプレイヤーの足跡（直近50歩）をたどる
+  //   - 周囲8マスのうち目標に最も近いマスへ進む（経路探索はしない。近づけなくても、どこかへは動く）
+  //   - 直前にいたマスへは戻りにくい（障害物をある程度回り込める）
+  //   - コウモリやストーカーは3回に1回でたらめに動く
+  netHackMove(player, game) {
+    const map = game.map;
+    let gx = player.x, gy = player.y;
+    const d2 = (ax, ay, bx, by) => (ax - bx) * (ax - bx) + (ay - by) * (ay - by);
+    const shouldSee = map.visible[this.y] && map.visible[this.y][this.x] && d2(this.x, this.y, gx, gy) <= 36;
+    let appr = 1;
+    if ((this.isErratic || this.defId === 'shadow_stalker') && Math.random() < 1 / 3) appr = 0;
+    if (!shouldSee && !NO_EYES.includes(this.defId)) {
+      const t = game.getTrack(this.x, this.y);
+      if (t) { gx = t.x; gy = t.y; }
+    }
+
+    const track = this.mtrack || (this.mtrack = []);
+    let best = null, bestDist = Infinity, chcnt = 0;
+    for (const dir of CONFIG.DIRECTIONS) {
+      const nx = this.x + dir.dx, ny = this.y + dir.dy;
+      if (nx === player.x && ny === player.y) continue;
+      const door = map.getDoor(nx, ny);
+      const openable = door && door.state === 'closed' && !dir.isDiagonal;
+      if (!openable && !this.canStepTo(nx, ny, game)) continue;
+      if (game.getMonsterAt(nx, ny)) continue;
+      // 最近いたマスは避ける（新しいものほど強く）
+      const j = track.findIndex(t => t.x === nx && t.y === ny);
+      if (j !== -1 && Math.floor(Math.random() * 4 * (track.length - j)) !== 0) continue;
+      const nd = d2(nx, ny, gx, gy);
+      const take = !best || (appr === 1 && nd < bestDist) || (appr === 0 && Math.floor(Math.random() * ++chcnt) === 0);
+      if (take) { best = { dir, door: openable ? door : null }; bestDist = nd; }
+    }
+    if (!best) return;
+    if (best.door) {
+      // 閉じた扉を開ける（このターンは移動しない）
+      best.door.state = 'open';
+      if (map.visible[best.door.y] && map.visible[best.door.y][best.door.x]) {
+        game.sound.playDoor(true);
+        game.addLog('扉が開いた。', 'warning');
+      }
+      return;
+    }
+    track.unshift({ x: this.x, y: this.y });
+    if (track.length > MONSTER_TRACK_SIZE) track.pop();
+    this.move(best.dir.dx, best.dir.dy);
   }
 
   // ランダム徘徊

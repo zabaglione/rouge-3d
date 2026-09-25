@@ -7,22 +7,23 @@
  * - 演出：加算合成のパーティクル、HDR＋ブルーム、色収差、ビネット、カメラワーク
  * - 文字（ダメージ数値・階層名・HPバー）は上に重ねた 2D キャンバスに描く
  */
-import { CONFIG } from '../config.js?v=20260925_01';
-import { ATTACK_ANIM_MS, DAMAGE_ANIM_MS } from '../entities/Entity.js?v=20260925_01';
-import { GAME_STATES } from '../engine/Game.js?v=20260925_01';
-import { FX } from '../engine/Animation.js?v=20260925_01';
+import { CONFIG } from '../config.js?v=20260925_06';
+import { ATTACK_ANIM_MS, DAMAGE_ANIM_MS } from '../entities/Entity.js?v=20260925_06';
+import { GAME_STATES } from '../engine/Game.js?v=20260925_06';
+import { FX } from '../engine/Animation.js?v=20260925_06';
 import {
   mat4, multiply, perspective, lookAt, invert, compose, transformPoint, lerp, lerpAngle, damp, hexToRgb, clamp,
-} from './math.js?v=20260925_01';
-import { MeshBuilder, VERTEX_STRIDE, VERTEX_FLOATS } from './geometry.js?v=20260925_01';
+} from './math.js?v=20260925_06';
+import { MeshBuilder, VERTEX_STRIDE, VERTEX_FLOATS } from './geometry.js?v=20260925_06';
 import {
   MAX_LIGHTS, MESH_SHADER, GLYPH_SHADER, FX_SHADER, BLOOM_DOWN_SHADER, BLOOM_UP_SHADER, COMPOSITE_SHADER,
-} from './shaders.js?v=20260925_01';
-import { buildWorld } from './world.js?v=20260925_01';
+} from './shaders.js?v=20260925_06';
+import { buildWorld } from './world.js?v=20260925_06';
 import {
   buildPlayerParts, buildSword, buildShield, buildItemModel, buildChest, writeCape, HIP_Y, SHOULDER,
-} from './models.js?v=20260925_01';
-import { buildGlyphAtlas, MONSTER_GLYPHS, TRAP_GLYPH } from './glyphs.js?v=20260925_01';
+  buildDoorLeaf, buildBrokenDoor, buildFountain, buildAltar, buildSink, buildGrave,
+} from './models.js?v=20260925_06';
+import { buildGlyphAtlas, MONSTER_GLYPHS, TRAP_GLYPH } from './glyphs.js?v=20260925_06';
 
 const HDR_FORMAT = 'rgba16float';
 const DEPTH_FORMAT = 'depth24plus';
@@ -299,6 +300,16 @@ export class Renderer3D {
     const capeData = this.capeBuilder.toArray();
     this.cape = { buf: this.device.createBuffer({ size: capeData.byteLength, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST }), count: capeData.length / VERTEX_FLOATS };
     this.chest = this.mesh(buildChest());
+    this.doorLeaf = this.mesh(buildDoorLeaf(false));
+    this.doorLeafLocked = this.mesh(buildDoorLeaf(true));
+    this.brokenDoor = this.mesh(buildBrokenDoor());
+    this.featureMeshes = {
+      fountain: this.mesh(buildFountain()),
+      altar: this.mesh(buildAltar()),
+      sink: this.mesh(buildSink()),
+      grave: this.mesh(buildGrave()),
+    };
+    this.doorAnim = new WeakMap();
     this.arrow = this.mesh(buildItemModel({ type: 'arrow', id: 'arr_wood', color: '#ffffff' }));
     // 立体文字の入れ物（単位の箱）
     const box = new MeshBuilder();
@@ -409,6 +420,7 @@ export class Renderer3D {
     this.drawItems(game);
     this.drawMonsters(game, gameDeltaMs);
     this.drawTraps(game);
+    this.drawDoorsAndFeatures(game, dt);
     this.drawFx(game);
     this.collectLights(game);
     this.writeFrameUniforms();
@@ -496,16 +508,22 @@ export class Renderer3D {
   }
 
   // 階層が変わったら地形を作り直す
+  // 階が変わったら地形を作り直し、同じ階で地形が変わった（部屋に明かりが灯った等）ら形だけ作り直す
   syncWorld(game) {
-    const key = game.floorSerial;
-    if (this.floorKey === key && this.world) return;
-    this.floorKey = key;
+    const floorKey = game.floorSerial;
+    const rev = game.map.revision || 0;
+    if (this.floorKey === floorKey && this.worldRev === rev && this.world) return;
+    const newFloor = this.floorKey !== floorKey;
+    this.floorKey = floorKey;
+    this.worldRev = rev;
     if (this.world) this.world.mesh.buf.destroy();
     const w = buildWorld(game.map);
     this.world = { mesh: this.mesh(w.vertices), lights: w.lights, flames: w.flames };
-    this.fogVis.fill(0);
-    this.fogMem.fill(0);
-    this.snapCamera = true;
+    if (newFloor) {
+      this.fogVis.fill(0);
+      this.fogMem.fill(0);
+      this.snapCamera = true;
+    }
   }
 
   // 視界テクスチャを滑らかに追従させて転送
@@ -798,7 +816,7 @@ export class Renderer3D {
       st.yaw = lerpAngle(st.yaw, targetYaw, 0.1);
 
       const floaty = ['cave_bat', 'phantom', 'beholder', 'wraith'].includes(m.defId);
-      const big = ['dragon', 'arch_demon', 'lich', 'troll'].includes(m.defId) ? 1.25 : 1;
+      const big = ['dragon', 'arch_demon', 'lich', 'troll', 'minotaur'].includes(m.defId) ? 1.25 : 1;
       const bob = floaty ? 0.18 + Math.sin(this.time * 3 + st.seed) * 0.07 : Math.abs(Math.sin(this.time * 3 + st.seed)) * 0.03;
       const breathe = 1 + Math.sin(this.time * 2.5 + st.seed) * 0.03;
       const squash = hurt * 0.3;
@@ -829,6 +847,61 @@ export class Renderer3D {
       const s = 0.95 * (1 + t * 1.2);
       const model = compose(mat4(), dth.x, 0.5 + t * 0.3, dth.z, 0, -0.38, t * 0.6, s, s * (1 - t), s);
       this.addDraw(this.glyphDraws, null, model, dth.color, [Math.min(1, 0.5 + t * 2), 2, 1, 0], this.glyphRects[dth.glyph] || this.glyphRects['?']);
+    }
+  }
+
+  // 扉（開閉を滑らかに動かす）と、噴水・祭壇・流し台・墓
+  drawDoorsAndFeatures(game, dt) {
+    const map = game.map;
+    const T = CONFIG.TILES;
+    const cx = this.camTarget[0], cz = this.camTarget[2];
+    for (const door of map.doors.values()) {
+      const { x, y } = door;
+      if (!map.visited[y] || !map.visited[y][x]) continue;
+      if (Math.abs(x + 0.5 - cx) > 14 || Math.abs(y + 0.5 - cz) > 12) continue;
+      if (door.state === 'none') continue;
+      const ns = map.getTile(x - 1, y) === T.WALL && map.getTile(x + 1, y) === T.WALL;
+      if (door.state === 'broken') {
+        this.addDraw(this.meshDraws, this.brokenDoor, compose(mat4(), x + 0.5, 0, y + 0.5, ns ? 0 : Math.PI / 2), [1, 1, 1], [0, 0, 1, 1]);
+        continue;
+      }
+      // 0 = 閉, 1 = 開
+      const target = door.state === 'open' ? 1 : 0;
+      let a = this.doorAnim.get(door);
+      if (a === undefined) a = target;
+      a += (target - a) * damp(10, dt);
+      this.doorAnim.set(door, a);
+      // 南北に抜ける出入口：扉は東西に広がり、西側の柱を蝶番にして北（奥）へ開く
+      const baseYaw = ns ? 0 : Math.PI / 2;
+      const hx = ns ? x + 0.07 : x + 0.5;
+      const hz = ns ? y + 0.5 : y + 0.93;
+      const model = compose(mat4(), hx, 0.02, hz, baseYaw + a * Math.PI * 0.5 * (ns ? 1 : 1));
+      const flash = 0;
+      this.addDraw(this.meshDraws, door.state === 'locked' ? this.doorLeafLocked : this.doorLeaf, model, [1, 1, 1], [flash, 0, 1, 1]);
+    }
+    for (const f of map.features.values()) {
+      if (!map.visited[f.y] || !map.visited[f.y][f.x]) continue;
+      const mesh = this.featureMeshes[f.type];
+      if (!mesh) continue;
+      const fx = f.x + 0.5, fz = f.y + 0.5;
+      this.addDraw(this.meshDraws, mesh, compose(mat4(), fx, 0, fz, 0), [1, 1, 1], [0, 0, 1, 1]);
+      if (!map.visible[f.y] || !map.visible[f.y][f.x]) continue;
+      if (f.type === 'fountain') {
+        // 噴き上がる水と、水面のきらめき
+        for (let i = 0; i < 6; i++) {
+          const t = (this.time * 1.2 + i / 6) % 1;
+          const ang = i * 1.05 + this.time * 0.3;
+          const r = t * 0.3;
+          this.pushFx(FX.GLOW, fx + Math.cos(ang) * r, 0.58 + t * 0.25 - t * t * 0.55, fz + Math.sin(ang) * r, 0.03, [0.6, 1.2, 2.2], 1 - t);
+        }
+        this.pushFx(FX.RING, fx, 0.13, fz, 0.2 + ((this.time * 0.5) % 1) * 0.15, [0.4, 0.8, 1.6], 0.5, [0, 0, 0], [0, 0.1, 0.1, 0]);
+        this.frameLights.push({ x: fx, y: 0.6, z: fz, color: [0.35, 0.6, 1], intensity: 0.5, radius: 2.5 });
+      } else if (f.type === 'altar') {
+        for (const s of [-0.28, 0.28]) {
+          this.pushFx(FX.FLAME, fx + s, 0.68, fz, 0.035, [3.5, 1.8, 0.5], 1, [0, 0, 0], [0, 0, 0, f.x * 3 + s]);
+        }
+        this.frameLights.push({ x: fx, y: 0.9, z: fz, color: [1, 0.75, 0.4], intensity: 0.6, radius: 2.8 });
+      }
     }
   }
 

@@ -62,6 +62,7 @@ export const TRAP_TYPES = {
       if (p) {
         player.warpTo(p.x, p.y);
         game.updateVisibility();
+        game.onPlayerTeleported();
         game.addLog('ワープの罠だ！ 別の場所へ飛ばされた！', 'accent');
         game.sound.playMagic();
         game.animations.flash('#38bdf8', 0.45, 320);

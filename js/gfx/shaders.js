@@ -195,6 +195,18 @@ fn surface(mat: i32, P: vec3f, N: vec3f, base: vec3f, rough: f32, metal: f32, em
     s.height = edge * (1.0 - v.x * 0.6);
     s.rough = mix(1.0, 0.7, edge);
     s.ao = mix(0.55, 1.0, edge);
+  } else if (mat == 10) {
+    // 洞窟の岩肌：大小のこぶと筋、湿った暗がり
+    let q = select(P.xz, vec2f(P.x + P.z, P.y) * 1.3, abs(N.y) < 0.5);
+    let n1 = fbm(q * 2.2);
+    let n2 = fbm(q * 7.0 + vec2f(3.0, 1.0));
+    let v = voronoi(q * 3.0);
+    var col = base * (0.6 + 0.6 * n1) * (0.85 + 0.3 * v.z);
+    col = mix(col, col * vec3f(0.8, 0.9, 1.1), smoothstep(0.6, 0.8, n2) * 0.5);
+    s.albedo = col;
+    s.height = n1 * 0.7 + n2 * 0.3 + v.x * 0.2;
+    s.rough = mix(0.95, 0.55, smoothstep(0.65, 0.85, n2));
+    s.ao = mix(0.6, 1.0, n1);
   } else if (mat == 8) {
     // 壁の天面：暗い粗石
     let n = fbm(P.xz * 4.0);
@@ -283,8 +295,8 @@ fn fs(i: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
   let dhy = dpdy(s.height);
   let Nb = bumpNormal(N, dpx, dpy, dhx, dhy, 0.035);
 
-  // プレイヤーと手前の壁が重なる部分は透かす
-  if ((mat == 2 || mat == 8) && frame.player.w > 0.0) {
+  // プレイヤーと手前の地形（壁・柱・扉の枠など）が重なる部分は透かす
+  if (draw.params.w < 0.5 && i.world.y > 0.12 && frame.player.w > 0.0) {
     let toCam = normalize(frame.camPos.xyz - frame.player.xyz);
     let rel = i.world - frame.player.xyz;
     let t = dot(rel, toCam);

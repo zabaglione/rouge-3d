@@ -1,8 +1,8 @@
 /**
  * ダンジョンマップ状態管理・視界 (FoV)・通行/角抜け判定
  */
-import { CONFIG } from '../config.js?v=20260925_01';
-import { Trap, TRAP_TYPES } from './Trap.js?v=20260925_01';
+import { CONFIG } from '../config.js?v=20260925_06';
+import { Trap, TRAP_TYPES } from './Trap.js?v=20260925_06';
 
 export class DungeonMap {
   constructor(width, height) {
@@ -18,6 +18,13 @@ export class DungeonMap {
 
     // トラップ一覧
     this.traps = [];
+
+    // 扉（キー: y * width + x → { x, y, state: 'none' | 'broken' | 'open' | 'closed' | 'locked' }）
+    this.doors = new Map();
+    // 噴水・流し台・祭壇・墓（キー → { x, y, type }）
+    this.features = new Map();
+    // 階の種類（'rooms' | 'mines' | 'bigroom' | 'maze'）
+    this.style = 'rooms';
   }
 
   init(genData) {
@@ -28,6 +35,32 @@ export class DungeonMap {
     this.visited = Array(this.height).fill(null).map(() => Array(this.width).fill(false));
     this.visible = Array(this.height).fill(null).map(() => Array(this.width).fill(false));
     this.traps = [];
+    this.doors = new Map((genData.doors || []).map(d => [d.y * this.width + d.x, { ...d }]));
+    this.features = new Map((genData.features || []).map(f => [f.y * this.width + f.x, { x: f.x, y: f.y, type: f.type }]));
+    this.niches = genData.niches || [];
+    this.style = genData.style || 'rooms';
+    // 地形の見た目が変わるたびに増やす（描画側が作り直す合図）
+    this.revision = 0;
+  }
+
+  getDoor(x, y) {
+    return this.doors.get(y * this.width + x) || null;
+  }
+
+  getFeature(x, y) {
+    return this.features.get(y * this.width + x) || null;
+  }
+
+  // 閉じた（鍵付きを含む）扉か
+  isClosedDoor(x, y) {
+    const d = this.getDoor(x, y);
+    return !!d && (d.state === 'closed' || d.state === 'locked');
+  }
+
+  // 扉の付いた出入口（開閉どちらでも）。NetHack と同じく斜めには出入りできない
+  hasDoorFrame(x, y) {
+    const d = this.getDoor(x, y);
+    return !!d && d.state !== 'none' && d.state !== 'broken';
   }
 
   // 罠の配置
@@ -62,6 +95,7 @@ export class DungeonMap {
   // 床・通路・階段か
   isWalkable(x, y) {
     const tile = this.getTile(x, y);
+    if (tile === CONFIG.TILES.DOOR) return !this.isClosedDoor(x, y);
     return tile === CONFIG.TILES.FLOOR || tile === CONFIG.TILES.CORRIDOR || tile === CONFIG.TILES.STAIRS_DOWN;
   }
 
@@ -77,6 +111,11 @@ export class DungeonMap {
 
     // 目的マス自体が移動不可なら論外
     if (!this.isWalkable(toX, toY)) {
+      return false;
+    }
+
+    // 扉の付いた出入口には斜めに出入りできない（NetHack の規則）
+    if (this.hasDoorFrame(fromX, fromY) || this.hasDoorFrame(toX, toY)) {
       return false;
     }
 
@@ -109,8 +148,8 @@ export class DungeonMap {
 
     const currentRoom = this.getRoomAt(playerX, playerY);
 
-    if (currentRoom) {
-      // 部屋の中にいる場合：部屋の床＋周囲1マスの壁・出入口を全て視界内に
+    if (currentRoom && currentRoom.lit !== false) {
+      // 明るい部屋の中にいる場合：部屋の床＋周囲1マスの壁・出入口を全て視界内に
       const startX = Math.max(0, currentRoom.x - 1);
       const endX = Math.min(this.width - 1, currentRoom.x + currentRoom.w);
       const startY = Math.max(0, currentRoom.y - 1);
@@ -123,7 +162,7 @@ export class DungeonMap {
         }
       }
     } else {
-      // 通路にいる場合：プレイヤー周囲の近距離のみ可視
+      // 通路・暗い部屋・洞窟にいる場合：手元の明かりが届く近距離のみ可視
       for (let dy = -visionRadius; dy <= visionRadius; dy++) {
         for (let dx = -visionRadius; dx <= visionRadius; dx++) {
           const dist = Math.hypot(dx, dy);
@@ -188,12 +227,16 @@ export class DungeonMap {
       if (targetRoom) {
         x = targetRoom.x + Math.floor(Math.random() * targetRoom.w);
         y = targetRoom.y + Math.floor(Math.random() * targetRoom.h);
-      } else {
+      } else if (this.rooms.length) {
         const r = this.rooms[Math.floor(Math.random() * this.rooms.length)];
         x = r.x + Math.floor(Math.random() * r.w);
         y = r.y + Math.floor(Math.random() * r.h);
+      } else {
+        // 部屋のない階（洞窟・迷路）は床全体から選ぶ
+        x = 1 + Math.floor(Math.random() * (this.width - 2));
+        y = 1 + Math.floor(Math.random() * (this.height - 2));
       }
-      if (this.getTile(x, y) === CONFIG.TILES.FLOOR) {
+      if (this.getTile(x, y) === CONFIG.TILES.FLOOR && !this.getFeature(x, y)) {
         return { x, y };
       }
     }

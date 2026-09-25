@@ -31,6 +31,7 @@ export const MONSTER_GLYPHS = {
   beholder: 'e',       // 浮遊する眼
   lich: 'L',           // リッチ
   arch_demon: '&',     // 大悪魔
+  minotaur: 'H',       // 巨人類（迷路のミノタウロス）
 };
 
 // 罠（NetHack では '^'）

@@ -19,6 +19,7 @@ export const MAT = {
   GLOW: 7,      // 自発光（炎・魔法・液体）
   WALLTOP: 8,   // 壁の天面
   PARCHMENT: 9,
+  ROCK: 10,     // 洞窟の岩肌
 };
 
 export class MeshBuilder {

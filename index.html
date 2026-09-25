@@ -9,10 +9,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 
-  <link rel="stylesheet" href="css/main.css?v=20260925_01">
-  <link rel="stylesheet" href="css/hud.css?v=20260925_01">
-  <link rel="stylesheet" href="css/inventory.css?v=20260925_01">
-  <link rel="stylesheet" href="css/controls.css?v=20260925_01">
+  <link rel="stylesheet" href="css/main.css?v=20260925_06">
+  <link rel="stylesheet" href="css/hud.css?v=20260925_06">
+  <link rel="stylesheet" href="css/inventory.css?v=20260925_06">
+  <link rel="stylesheet" href="css/controls.css?v=20260925_06">
 </head>
 <body>
   <div id="app-container">
@@ -252,6 +252,19 @@
               ・ピンチの時は杖や巻物を活用！「位置転換の杖」や「昏睡のスクロール」で難局を切り抜けましょう。
             </p>
           </div>
+
+          <!-- NetHack 風のダンジョン -->
+          <div class="help-section">
+            <h4>🗺️ ダンジョンの地形（NetHack 風）</h4>
+            <table class="help-table">
+              <tr><td><b><kbd>+</kbd> 扉</b></td><td>歩いて押すと開く（固くて開かないことも）。鍵付きは扉を向いて攻撃で蹴破る。扉のある出入口は斜めに通れない</td></tr>
+              <tr><td><b><kbd>{</kbd> 噴水</b></td><td>上で攻撃ボタン：水を飲む（回復・毒・何かが飛び出す…）。枯れることもある</td></tr>
+              <tr><td><b><kbd>_</kbd> 祭壇</b></td><td>上で攻撃ボタン：祈る。瀕死や飢えの時は神が救ってくれるが、祈りすぎると怒りを買う</td></tr>
+              <tr><td><b><kbd>|</kbd> 墓</b></td><td>上で攻撃ボタン：掘り返す。副葬品が出ることも、死者が起き上がることも</td></tr>
+              <tr><td><b>暗い部屋</b></td><td>深い階ほど増える。部屋全体は見えず、手元の明かりの届く範囲だけ見える</td></tr>
+              <tr><td><b>特殊な階</b></td><td>浅い階の「鉱山の洞窟」、中層の「大部屋」、最深部手前の「迷路」</td></tr>
+            </table>
+          </div>
         </div>
       </div>
     </div>
@@ -295,6 +308,6 @@
     </div>
   </div>
 
-  <script type="module" src="js/main.js?v=20260925_01"></script>
+  <script type="module" src="js/main.js?v=20260925_06"></script>
 </body>
 </html>
