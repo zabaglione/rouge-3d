@@ -1,7 +1,7 @@
 /**
  * 画面上部ステータスHUD ＆ 画面下部メッセージログ管理
  */
-import { fxClock } from '../engine/FxClock.js?v=20260925_01';
+import { fxClock } from '../engine/FxClock.js?v=20260925_02';
 
 export class HUD {
   constructor() {

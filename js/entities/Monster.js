@@ -1,11 +1,11 @@
 /**
  * モンスターの定義、出現テーブル、AI行動ロジック（全24種・オリジナルローグ級）
  */
-import { Entity } from './Entity.js?v=20260925_01';
-import { CONFIG } from '../config.js?v=20260925_01';
-import { Item } from '../items/Item.js?v=20260925_01';
-import { fxClock } from '../engine/FxClock.js?v=20260925_01';
-import { projectileFlightMs } from '../engine/Animation.js?v=20260925_01';
+import { Entity } from './Entity.js?v=20260925_02';
+import { CONFIG } from '../config.js?v=20260925_02';
+import { Item } from '../items/Item.js?v=20260925_02';
+import { fxClock } from '../engine/FxClock.js?v=20260925_02';
+import { projectileFlightMs } from '../engine/Animation.js?v=20260925_02';
 
 export const MONSTER_DEFINITIONS = [
   // --- 浅層 (B1〜B4) ---

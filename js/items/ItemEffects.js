@@ -1,9 +1,9 @@
 /**
  * アイテム使用・読解・振下・投擲時の効果ロジック
  */
-import { ITEM_TYPES, Item } from './Item.js?v=20260925_01';
-import { fxClock } from '../engine/FxClock.js?v=20260925_01';
-import { projectileFlightMs } from '../engine/Animation.js?v=20260925_01';
+import { ITEM_TYPES, Item } from './Item.js?v=20260925_02';
+import { fxClock } from '../engine/FxClock.js?v=20260925_02';
+import { projectileFlightMs } from '../engine/Animation.js?v=20260925_02';
 
 // 衝撃波の杖：吹き飛ばす最大距離と激突ダメージ
 const KNOCKBACK_DISTANCE = 10;

@@ -9,7 +9,7 @@
  *   5. 深い階ほど暗い部屋が増える。噴水・流し台・祭壇・墓、壁のくぼみ（隠し部屋）、宝の動物園
  * 特殊な階：鉱山のような洞窟（浅い階）、大部屋（中層）、迷路（最深部の手前）
  */
-import { CONFIG } from '../config.js?v=20260925_01';
+import { CONFIG } from '../config.js?v=20260925_02';
 
 // 生成中だけ使う地形の種類（最終的に CONFIG.TILES に変換する）
 const K = { STONE: 0, WALL: 1, FLOOR: 2, CORR: 3, DOOR: 4 };

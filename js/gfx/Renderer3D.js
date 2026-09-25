@@ -7,23 +7,23 @@
  * - 演出：加算合成のパーティクル、HDR＋ブルーム、色収差、ビネット、カメラワーク
  * - 文字（ダメージ数値・階層名・HPバー）は上に重ねた 2D キャンバスに描く
  */
-import { CONFIG } from '../config.js?v=20260925_01';
-import { ATTACK_ANIM_MS, DAMAGE_ANIM_MS } from '../entities/Entity.js?v=20260925_01';
-import { GAME_STATES } from '../engine/Game.js?v=20260925_01';
-import { FX } from '../engine/Animation.js?v=20260925_01';
+import { CONFIG } from '../config.js?v=20260925_02';
+import { ATTACK_ANIM_MS, DAMAGE_ANIM_MS } from '../entities/Entity.js?v=20260925_02';
+import { GAME_STATES } from '../engine/Game.js?v=20260925_02';
+import { FX } from '../engine/Animation.js?v=20260925_02';
 import {
   mat4, multiply, perspective, lookAt, invert, compose, transformPoint, lerp, lerpAngle, damp, hexToRgb, clamp,
-} from './math.js?v=20260925_01';
-import { MeshBuilder, VERTEX_STRIDE, VERTEX_FLOATS } from './geometry.js?v=20260925_01';
+} from './math.js?v=20260925_02';
+import { MeshBuilder, VERTEX_STRIDE, VERTEX_FLOATS } from './geometry.js?v=20260925_02';
 import {
   MAX_LIGHTS, MESH_SHADER, GLYPH_SHADER, FX_SHADER, BLOOM_DOWN_SHADER, BLOOM_UP_SHADER, COMPOSITE_SHADER,
-} from './shaders.js?v=20260925_01';
-import { buildWorld } from './world.js?v=20260925_01';
+} from './shaders.js?v=20260925_02';
+import { buildWorld } from './world.js?v=20260925_02';
 import {
   buildPlayerParts, buildSword, buildShield, buildItemModel, buildChest, writeCape, HIP_Y, SHOULDER,
   buildDoorLeaf, buildBrokenDoor, buildFountain, buildAltar, buildSink, buildGrave,
-} from './models.js?v=20260925_01';
-import { buildGlyphAtlas, MONSTER_GLYPHS, TRAP_GLYPH } from './glyphs.js?v=20260925_01';
+} from './models.js?v=20260925_02';
+import { buildGlyphAtlas, MONSTER_GLYPHS, TRAP_GLYPH } from './glyphs.js?v=20260925_02';
 
 const HDR_FORMAT = 'rgba16float';
 const DEPTH_FORMAT = 'depth24plus';

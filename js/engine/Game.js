@@ -1,23 +1,23 @@
 /**
  * ゲームステート・ターン管理・統合ゲームエンジン
  */
-import { CONFIG } from '../config.js?v=20260925_01';
-import { sound } from './Audio.js?v=20260925_01';
-import { InputManager } from './Input.js?v=20260925_01';
-import { AnimationEngine } from './Animation.js?v=20260925_01';
-import { fxClock } from './FxClock.js?v=20260925_01';
-import { DungeonGenerator } from '../dungeon/DungeonGen.js?v=20260925_01';
-import { DungeonMap } from '../dungeon/Map.js?v=20260925_01';
-import { Player } from '../entities/Player.js?v=20260925_01';
-import { Monster } from '../entities/Monster.js?v=20260925_01';
-import { Item, ITEM_TYPES } from '../items/Item.js?v=20260925_01';
-import { Inventory } from '../items/Inventory.js?v=20260925_01';
-import { ItemEffectHandler } from '../items/ItemEffects.js?v=20260925_01';
-import { HUD } from '../ui/HUD.js?v=20260925_01';
-import { InventoryUI } from '../ui/InventoryUI.js?v=20260925_01';
-import { OverlayMap } from '../ui/OverlayMap.js?v=20260925_01';
-import { VirtualPad } from '../ui/VirtualPad.js?v=20260925_01';
-import { MONSTER_GLYPHS } from '../gfx/glyphs.js?v=20260925_01';
+import { CONFIG } from '../config.js?v=20260925_02';
+import { sound } from './Audio.js?v=20260925_02';
+import { InputManager } from './Input.js?v=20260925_02';
+import { AnimationEngine } from './Animation.js?v=20260925_02';
+import { fxClock } from './FxClock.js?v=20260925_02';
+import { DungeonGenerator } from '../dungeon/DungeonGen.js?v=20260925_02';
+import { DungeonMap } from '../dungeon/Map.js?v=20260925_02';
+import { Player } from '../entities/Player.js?v=20260925_02';
+import { Monster } from '../entities/Monster.js?v=20260925_02';
+import { Item, ITEM_TYPES } from '../items/Item.js?v=20260925_02';
+import { Inventory } from '../items/Inventory.js?v=20260925_02';
+import { ItemEffectHandler } from '../items/ItemEffects.js?v=20260925_02';
+import { HUD } from '../ui/HUD.js?v=20260925_02';
+import { InventoryUI } from '../ui/InventoryUI.js?v=20260925_02';
+import { OverlayMap } from '../ui/OverlayMap.js?v=20260925_02';
+import { VirtualPad } from '../ui/VirtualPad.js?v=20260925_02';
+import { MONSTER_GLYPHS } from '../gfx/glyphs.js?v=20260925_02';
 
 // アイテムが既存アイテムと重ならないよう転がる最大距離（マス）
 const ITEM_SCATTER_RADIUS = 3;
