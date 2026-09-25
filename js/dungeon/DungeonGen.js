@@ -9,7 +9,7 @@
  *   5. 深い階ほど暗い部屋が増える。噴水・流し台・祭壇・墓、壁のくぼみ（隠し部屋）、宝の動物園
  * 特殊な階：鉱山のような洞窟（浅い階）、大部屋（中層）、迷路（最深部の手前）
  */
-import { CONFIG } from '../config.js?v=20260925_02';
+import { CONFIG } from '../config.js?v=20260925_03';
 
 // 生成中だけ使う地形の種類（最終的に CONFIG.TILES に変換する）
 const K = { STONE: 0, WALL: 1, FLOOR: 2, CORR: 3, DOOR: 4 };
@@ -24,6 +24,11 @@ const ROOM_H = { min: 2, max: 7 };
 const MINES_FLOORS = { from: 2, to: 4, chance: 0.35 };
 const BIGROOM_FLOORS = { from: 10, to: 12, chance: 0.4 };
 const MAZE_FLOORS = { from: 18, to: 19, chance: 0.6 };
+
+// 迷路の階に置くもの（NetHack の makemaz：物が多く、ミノタウロスがうろつく）
+export const MAZE_CONTENTS = {
+  items: [11, 18], gold: [7, 12], traps: [7, 12], monsters: [7, 11], minotaurs: [0, 2],
+};
 
 // 部屋の地形の出現率（NetHack の mkfount / mksink / mkaltar / mkgrave と同程度）
 const FEATURE_CHANCE = { fountain: 1 / 10, sink: 1 / 60, altar: 1 / 60, grave: 1 / 40 };
@@ -458,7 +463,7 @@ export class DungeonGenerator {
     return { start, stairs, startRoom: room };
   }
 
-  // --- 迷路（穴掘り法で1マス幅の通路） ---
+  // --- 迷路（NetHack の makemaz と同じく、輪のない1マス幅の迷路） ---
 
   makeMaze() {
     const W = this.width, H = this.height;
@@ -481,24 +486,20 @@ export class DungeonGenerator {
       this.k[ny * 2 + 1][nx * 2 + 1] = K.FLOOR;
       stack.push([nx, ny]);
     }
-    // 少し壁を崩して回り道を作る
-    for (let i = 0; i < 90; i++) {
-      const x = 1 + rn2(W - 2), y = 1 + rn2(H - 2);
-      if (this.k[y][x] !== K.STONE) continue;
-      const h2 = this.k[y][x - 1] === K.FLOOR && this.k[y][x + 1] === K.FLOOR;
-      const v2 = this.k[y - 1][x] === K.FLOOR && this.k[y + 1][x] === K.FLOOR;
-      if (h2 !== v2) this.k[y][x] = K.FLOOR;
-    }
     this.wallAround();
-    const start = { x: 1, y: 1 };
-    const dist = this.bfs(1, 1);
-    let best = start, bestD = -1;
-    for (let y = 0; y < H; y++) {
-      for (let x = 0; x < W; x++) {
-        if (dist[y][x] > bestD && dist[y][x] < Infinity) { bestD = dist[y][x]; best = { x, y }; }
-      }
+    // 上り（到着地点）・下り階段はどちらも迷路のランダムな位置（NetHack の mazexy）
+    const start = this.mazeXY();
+    let stairs = this.mazeXY();
+    for (let i = 0; i < 20 && stairs.x === start.x && stairs.y === start.y; i++) stairs = this.mazeXY();
+    return { start, stairs };
+  }
+
+  // 迷路の通路上のランダムな位置
+  mazeXY() {
+    for (;;) {
+      const x = 1 + rn2(this.width - 2), y = 1 + rn2(this.height - 2);
+      if (this.k[y][x] === K.FLOOR) return { x, y };
     }
-    return { start, stairs: best };
   }
 
   // --- 補助 ---

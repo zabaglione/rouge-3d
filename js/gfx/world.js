@@ -2,9 +2,9 @@
  * ダンジョンのマップから 3D の地形（床・壁・階段・装飾）と光源を組み立てる
  * 座標：タイル (gx, gy) の中心 = ワールド (gx + 0.5, 0, gy + 0.5)。Y が上
  */
-import { MeshBuilder, MAT } from './geometry.js?v=20260925_02';
-import { hexToRgb } from './math.js?v=20260925_02';
-import { CONFIG } from '../config.js?v=20260925_02';
+import { MeshBuilder, MAT } from './geometry.js?v=20260925_03';
+import { hexToRgb } from './math.js?v=20260925_03';
+import { CONFIG } from '../config.js?v=20260925_03';
 
 export const WALL_H = 1.25;
 

@@ -1,23 +1,23 @@
 /**
  * ゲームステート・ターン管理・統合ゲームエンジン
  */
-import { CONFIG } from '../config.js?v=20260925_02';
-import { sound } from './Audio.js?v=20260925_02';
-import { InputManager } from './Input.js?v=20260925_02';
-import { AnimationEngine } from './Animation.js?v=20260925_02';
-import { fxClock } from './FxClock.js?v=20260925_02';
-import { DungeonGenerator } from '../dungeon/DungeonGen.js?v=20260925_02';
-import { DungeonMap } from '../dungeon/Map.js?v=20260925_02';
-import { Player } from '../entities/Player.js?v=20260925_02';
-import { Monster } from '../entities/Monster.js?v=20260925_02';
-import { Item, ITEM_TYPES } from '../items/Item.js?v=20260925_02';
-import { Inventory } from '../items/Inventory.js?v=20260925_02';
-import { ItemEffectHandler } from '../items/ItemEffects.js?v=20260925_02';
-import { HUD } from '../ui/HUD.js?v=20260925_02';
-import { InventoryUI } from '../ui/InventoryUI.js?v=20260925_02';
-import { OverlayMap } from '../ui/OverlayMap.js?v=20260925_02';
-import { VirtualPad } from '../ui/VirtualPad.js?v=20260925_02';
-import { MONSTER_GLYPHS } from '../gfx/glyphs.js?v=20260925_02';
+import { CONFIG } from '../config.js?v=20260925_03';
+import { sound } from './Audio.js?v=20260925_03';
+import { InputManager } from './Input.js?v=20260925_03';
+import { AnimationEngine } from './Animation.js?v=20260925_03';
+import { fxClock } from './FxClock.js?v=20260925_03';
+import { DungeonGenerator, MAZE_CONTENTS } from '../dungeon/DungeonGen.js?v=20260925_03';
+import { DungeonMap } from '../dungeon/Map.js?v=20260925_03';
+import { Player } from '../entities/Player.js?v=20260925_03';
+import { Monster } from '../entities/Monster.js?v=20260925_03';
+import { Item, ITEM_TYPES } from '../items/Item.js?v=20260925_03';
+import { Inventory } from '../items/Inventory.js?v=20260925_03';
+import { ItemEffectHandler } from '../items/ItemEffects.js?v=20260925_03';
+import { HUD } from '../ui/HUD.js?v=20260925_03';
+import { InventoryUI } from '../ui/InventoryUI.js?v=20260925_03';
+import { OverlayMap } from '../ui/OverlayMap.js?v=20260925_03';
+import { VirtualPad } from '../ui/VirtualPad.js?v=20260925_03';
+import { MONSTER_GLYPHS } from '../gfx/glyphs.js?v=20260925_03';
 
 // アイテムが既存アイテムと重ならないよう転がる最大距離（マス）
 const ITEM_SCATTER_RADIUS = 3;
@@ -217,7 +217,10 @@ export class Game {
 
     // モンスター生成（階層に応じて4〜8匹、モンスターハウスなら+10匹）
     this.monsters = [];
-    const monsterCount = Math.floor(Math.random() * 4) + 4 + Math.floor(floorNumber * 0.5);
+    // 迷路の階は NetHack の makemaz と同じ数だけ置く
+    const maze = genData.style === 'maze';
+    const range = ([lo, hi]) => lo + Math.floor(Math.random() * (hi - lo + 1));
+    const monsterCount = maze ? range(MAZE_CONTENTS.monsters) : Math.floor(Math.random() * 4) + 4 + Math.floor(floorNumber * 0.5);
     for (let i = 0; i < monsterCount; i++) {
       const p = this.findRandomFreeTile(null, true);
       if (p) this.monsters.push(Monster.spawnRandom(floorNumber, p.x, p.y));
@@ -244,14 +247,14 @@ export class Game {
     }
 
     // アイテム生成（フロアに4〜7個配置）
-    const itemCount = Math.floor(Math.random() * 4) + 4;
+    const itemCount = maze ? range(MAZE_CONTENTS.items) : Math.floor(Math.random() * 4) + 4;
     for (let i = 0; i < itemCount; i++) {
       const p = this.map.getRandomFloorTile();
       if (p) this.placeItem(Item.getRandomItem(floorNumber), p.x, p.y);
     }
 
     // ゴールド生成（フロアに2〜4個配置）
-    const goldCount = Math.floor(Math.random() * 3) + 2;
+    const goldCount = maze ? range(MAZE_CONTENTS.gold) : Math.floor(Math.random() * 3) + 2;
     for (let i = 0; i < goldCount; i++) {
       const p = this.map.getRandomFloorTile();
       if (p) this.placeItem(Item.createGold(floorNumber), p.x, p.y);
@@ -263,7 +266,15 @@ export class Game {
     }
 
     // トラップ生成（フロアに3〜6個配置）
-    this.map.spawnTraps(Math.floor(Math.random() * 4) + 3);
+    this.map.spawnTraps(maze ? range(MAZE_CONTENTS.traps) : Math.floor(Math.random() * 4) + 3);
+
+    // 迷路の主、ミノタウロス
+    if (maze) {
+      for (let i = range(MAZE_CONTENTS.minotaurs); i > 0; i--) {
+        const p = this.findRandomFreeTile(null, true);
+        if (p) this.monsters.push(Monster.createById('minotaur', p.x, p.y));
+      }
+    }
 
     this.announceLevel(genData);
   }

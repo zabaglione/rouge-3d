@@ -1,11 +1,11 @@
 /**
  * モンスターの定義、出現テーブル、AI行動ロジック（全24種・オリジナルローグ級）
  */
-import { Entity } from './Entity.js?v=20260925_02';
-import { CONFIG } from '../config.js?v=20260925_02';
-import { Item } from '../items/Item.js?v=20260925_02';
-import { fxClock } from '../engine/FxClock.js?v=20260925_02';
-import { projectileFlightMs } from '../engine/Animation.js?v=20260925_02';
+import { Entity } from './Entity.js?v=20260925_03';
+import { CONFIG } from '../config.js?v=20260925_03';
+import { Item } from '../items/Item.js?v=20260925_03';
+import { fxClock } from '../engine/FxClock.js?v=20260925_03';
+import { projectileFlightMs } from '../engine/Animation.js?v=20260925_03';
 
 export const MONSTER_DEFINITIONS = [
   // --- 浅層 (B1〜B4) ---
@@ -369,6 +369,20 @@ export const MONSTER_DEFINITIONS = [
     minFloor: 17,
     maxFloor: 20,
     desc: '最深層の冥府を統べる大悪魔。倍速行動と瞬間転移奇襲で冒険者を粉砕する。',
+  },
+  {
+    id: 'minotaur',
+    name: 'ミノタウロス',
+    icon: '🐂',
+    color: '#a16207',
+    hp: 110,
+    atk: 30,
+    def: 14,
+    exp: 280,
+    speed: 1,
+    minFloor: 99, // 通常は出現しない（迷路の階にだけ置かれる）
+    maxFloor: 99,
+    desc: '迷路の奥をさまよう牛頭の巨人。迷い込んだ者を角と拳で叩き潰す。',
   },
 ];
 

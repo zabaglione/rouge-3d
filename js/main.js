@@ -1,8 +1,8 @@
 /**
  * メインエントリーポイント
  */
-import { Game } from './engine/Game.js?v=20260925_02';
-import { Renderer3D } from './gfx/Renderer3D.js?v=20260925_02';
+import { Game } from './engine/Game.js?v=20260925_03';
+import { Renderer3D } from './gfx/Renderer3D.js?v=20260925_03';
 
 // これより短い間隔の2回目のタップはダブルタップ（拡大）とみなして抑止する (ms)
 const DOUBLE_TAP_INTERVAL = 350;
