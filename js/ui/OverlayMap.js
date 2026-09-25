@@ -2,8 +2,8 @@
  * 歩いたマップの透過オーバーレイ＆ミニマップ表示システム
  * コントローラーのL1/Select/Mキー/ボタンで【全画面透過 / ミニマップ / 非表示】をワンタッチ切替
  */
-import { CONFIG } from '../config.js?v=20260925_03';
-import { MONSTER_GLYPHS } from '../gfx/glyphs.js?v=20260925_03';
+import { CONFIG } from '../config.js?v=20260925_04';
+import { MONSTER_GLYPHS } from '../gfx/glyphs.js?v=20260925_04';
 
 // アイテムの分類記号（NetHack）
 const ITEM_CLASS_GLYPHS = {

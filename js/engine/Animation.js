@@ -6,8 +6,8 @@
  * 描画は Renderer3D がこのデータを読んで行う。
  * 座標はタイル単位で受け取り、ワールド座標（タイル中心 = gx + 0.5, gy + 0.5）に変換して保持する。
  */
-import { fxClock } from './FxClock.js?v=20260925_03';
-import { hexToRgb } from '../gfx/math.js?v=20260925_03';
+import { fxClock } from './FxClock.js?v=20260925_04';
+import { hexToRgb } from '../gfx/math.js?v=20260925_04';
 
 // 画面揺れ（トラウマ値）の減衰と、カメラの反動・寄りが戻る速さ（1秒あたり）
 const SHAKE_DECAY_PER_SEC = 2.0;

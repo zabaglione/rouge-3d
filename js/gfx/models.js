@@ -2,9 +2,9 @@
  * 手続き的に組み立てる 3D モデル：プレイヤー（騎士）・アイテム・宝箱など
  * 単位は 1 = 1マス。モデルは +Z を正面、Y を上として作る。
  */
-import { MeshBuilder, MAT } from './geometry.js?v=20260925_03';
-import { hexToRgb } from './math.js?v=20260925_03';
-import { ITEM_TYPES } from '../items/Item.js?v=20260925_03';
+import { MeshBuilder, MAT } from './geometry.js?v=20260925_04';
+import { hexToRgb } from './math.js?v=20260925_04';
+import { ITEM_TYPES } from '../items/Item.js?v=20260925_04';
 
 const STEEL = { color: hexToRgb('#d5dde6'), rough: 0.32, metal: 0.75, emissive: 0, material: MAT.METAL };
 const DARK_STEEL = { color: hexToRgb('#6b7582'), rough: 0.4, metal: 0.7, emissive: 0, material: MAT.METAL };

@@ -1,8 +1,8 @@
 /**
  * ダンジョンマップ状態管理・視界 (FoV)・通行/角抜け判定
  */
-import { CONFIG } from '../config.js?v=20260925_03';
-import { Trap, TRAP_TYPES } from './Trap.js?v=20260925_03';
+import { CONFIG } from '../config.js?v=20260925_04';
+import { Trap, TRAP_TYPES } from './Trap.js?v=20260925_04';
 
 export class DungeonMap {
   constructor(width, height) {
@@ -239,37 +239,6 @@ export class DungeonMap {
       }
     }
     return null;
-  }
-
-  // (x, y) から各マスへの歩数（モンスターの経路探索用）。閉じた扉は開けて通れるものとして数える
-  distanceField(sx, sy) {
-    const W = this.width, H = this.height;
-    const dist = new Float32Array(W * H).fill(Infinity);
-    const passable = (x, y) => {
-      if (this.isWalkable(x, y)) return true;
-      const d = this.getDoor(x, y);
-      return !!d && d.state === 'closed';
-    };
-    dist[sy * W + sx] = 0;
-    const q = [sy * W + sx];
-    for (let i = 0; i < q.length; i++) {
-      const cx = q[i] % W, cy = Math.floor(q[i] / W);
-      const cd = dist[q[i]];
-      for (const dir of CONFIG.DIRECTIONS) {
-        const nx = cx + dir.dx, ny = cy + dir.dy;
-        if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
-        const ni = ny * W + nx;
-        if (dist[ni] !== Infinity || !passable(nx, ny)) continue;
-        if (dir.isDiagonal) {
-          // 角抜け・扉の斜め出入りはできない
-          if (!passable(cx + dir.dx, cy) || !passable(cx, cy + dir.dy)) continue;
-          if (this.hasDoorFrame(cx, cy) || this.hasDoorFrame(nx, ny)) continue;
-        }
-        dist[ni] = cd + 1;
-        q.push(ni);
-      }
-    }
-    return dist;
   }
 
   // 素振りなどで罠を発見する（正面の罠）

@@ -1,23 +1,23 @@
 /**
  * ゲームステート・ターン管理・統合ゲームエンジン
  */
-import { CONFIG } from '../config.js?v=20260925_03';
-import { sound } from './Audio.js?v=20260925_03';
-import { InputManager } from './Input.js?v=20260925_03';
-import { AnimationEngine } from './Animation.js?v=20260925_03';
-import { fxClock } from './FxClock.js?v=20260925_03';
-import { DungeonGenerator, MAZE_CONTENTS } from '../dungeon/DungeonGen.js?v=20260925_03';
-import { DungeonMap } from '../dungeon/Map.js?v=20260925_03';
-import { Player } from '../entities/Player.js?v=20260925_03';
-import { Monster } from '../entities/Monster.js?v=20260925_03';
-import { Item, ITEM_TYPES } from '../items/Item.js?v=20260925_03';
-import { Inventory } from '../items/Inventory.js?v=20260925_03';
-import { ItemEffectHandler } from '../items/ItemEffects.js?v=20260925_03';
-import { HUD } from '../ui/HUD.js?v=20260925_03';
-import { InventoryUI } from '../ui/InventoryUI.js?v=20260925_03';
-import { OverlayMap } from '../ui/OverlayMap.js?v=20260925_03';
-import { VirtualPad } from '../ui/VirtualPad.js?v=20260925_03';
-import { MONSTER_GLYPHS } from '../gfx/glyphs.js?v=20260925_03';
+import { CONFIG } from '../config.js?v=20260925_04';
+import { sound } from './Audio.js?v=20260925_04';
+import { InputManager } from './Input.js?v=20260925_04';
+import { AnimationEngine } from './Animation.js?v=20260925_04';
+import { fxClock } from './FxClock.js?v=20260925_04';
+import { DungeonGenerator, MAZE_CONTENTS } from '../dungeon/DungeonGen.js?v=20260925_04';
+import { DungeonMap } from '../dungeon/Map.js?v=20260925_04';
+import { Player } from '../entities/Player.js?v=20260925_04';
+import { Monster } from '../entities/Monster.js?v=20260925_04';
+import { Item, ITEM_TYPES } from '../items/Item.js?v=20260925_04';
+import { Inventory } from '../items/Inventory.js?v=20260925_04';
+import { ItemEffectHandler } from '../items/ItemEffects.js?v=20260925_04';
+import { HUD } from '../ui/HUD.js?v=20260925_04';
+import { InventoryUI } from '../ui/InventoryUI.js?v=20260925_04';
+import { OverlayMap } from '../ui/OverlayMap.js?v=20260925_04';
+import { VirtualPad } from '../ui/VirtualPad.js?v=20260925_04';
+import { MONSTER_GLYPHS } from '../gfx/glyphs.js?v=20260925_04';
 
 // アイテムが既存アイテムと重ならないよう転がる最大距離（マス）
 const ITEM_SCATTER_RADIUS = 3;
@@ -58,6 +58,8 @@ const EPITAPHS = [
 const PRAYER_TIMEOUT = 300;
 // 敵を配置するとき、開始地点からこれ以上離す（部屋のない階で開始直後に囲まれないように）
 const SPAWN_MIN_DIST = 7;
+// 敵がたどれるプレイヤーの足跡の長さ（NetHack の UTSZ）
+const PLAYER_TRACK_SIZE = 50;
 
 export const GAME_STATES = {
   TITLE: 'title',
@@ -195,6 +197,7 @@ export class Game {
   // フロア生成
   generateFloor(floorNumber) {
     this.currentFloor = floorNumber;
+    this.track = [];
     // 地形を作り直すための通し番号（生成器はタイル配列を使い回すため）
     this.floorSerial = (this.floorSerial || 0) + 1;
     const genData = this.generator.generate(floorNumber);
@@ -277,6 +280,23 @@ export class Game {
     }
 
     this.announceLevel(genData);
+  }
+
+  // プレイヤーの足跡（NetHack の utrack：直近 PLAYER_TRACK_SIZE 歩）
+  recordTrack(x, y) {
+    this.track = this.track || [];
+    this.track.push({ x, y });
+    if (this.track.length > PLAYER_TRACK_SIZE) this.track.shift();
+  }
+
+  // (x, y) の隣にある最も新しい足跡（NetHack の gettrack。足跡の上にいる場合は無し）
+  getTrack(x, y) {
+    const t = this.track || [];
+    for (let i = t.length - 1; i >= 0; i--) {
+      const d = Math.max(Math.abs(t[i].x - x), Math.abs(t[i].y - y));
+      if (d <= 1) return d === 1 ? t[i] : null;
+    }
+    return null;
   }
 
   // 階の雰囲気を伝えるメッセージ（NetHack の「音が聞こえる」）
@@ -491,7 +511,8 @@ export class Game {
       return false;
     }
 
-    // 3. 移動実行
+    // 3. 移動実行（足跡を残す。見失った敵はこれをたどってくる）
+    this.recordTrack(this.player.x, this.player.y);
     this.animations.addDust(this.player.x, this.player.y, this.isDashing ? 4 : 2);
     this.player.moveTo(nx, ny);
     this.sound.playStep();
@@ -1018,8 +1039,6 @@ export class Game {
     const playerFxActive = this.player.attackAnimTimer > 0 ||
       this.animations.projectiles.some(p => !p.isPickup) || this.animations.beams.length > 0;
     let fxOffset = playerFxActive ? PLAYER_TO_ENEMY_DELAY : 0;
-    // モンスターの経路探索用に、プレイヤーまでの歩数をターンごとに1回だけ計算する
-    this.distField = this.map.distanceField(this.player.x, this.player.y);
     try {
       for (const m of [...this.monsters]) {
         if (m.isDead() || !this.monsters.includes(m)) continue;

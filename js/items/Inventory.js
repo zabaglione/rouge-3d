@@ -1,7 +1,7 @@
 /**
  * プレイヤーのインベントリ（持ち物袋）管理システム
  */
-import { ITEM_TYPES } from './Item.js?v=20260925_03';
+import { ITEM_TYPES } from './Item.js?v=20260925_04';
 
 export class Inventory {
   constructor(capacity = 20) {
